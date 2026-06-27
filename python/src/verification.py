@@ -4,7 +4,7 @@ DevBuddy Verification Script — Week 0
 This script verifies:
 1. OpenRouter connectivity
 2. Structured output (LLM returns a typed object, not prose)
-3. Cost tracking (token usage from response headers)
+3. Cost tracking (token usage from OpenRouter)
 4. Your environment is ready for Week 1
 
 Run: python src/verification.py
@@ -19,7 +19,6 @@ import time
 from datetime import datetime
 
 # Ensure src/ is importable (Python 3.12+ doesn't auto-add CWD)
-# __file__ is python/src/verification.py, so parent is python/
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -28,9 +27,6 @@ from typing import Literal
 
 from src.llm import get_llm
 from src.config import DEVBUDDY_MODEL
-
-# ─── Configuration ─────────────────────────────────────────────
-MODEL = DEVBUDDY_MODEL
 
 # ─── Schema Definition ─────────────────────────────────────────
 # This is a preview of Week 2. Today you just see it work.
@@ -62,7 +58,8 @@ def main():
         print(f"❌ {e}")
         sys.exit(1)
 
-    structured_llm = llm.with_structured_output(BuildCheck)
+    # include_raw=True → returns {"raw": AIMessage, "parsed": BuildCheck}
+    structured_llm = llm.with_structured_output(BuildCheck, include_raw=True)
 
     projects = ["auth-service", "api-gateway", "user-service"]
     total_cost = 0.0
@@ -73,7 +70,7 @@ def main():
 
         start = time.time()
 
-        response = structured_llm.invoke([
+        result = structured_llm.invoke([
             SystemMessage(content=(
                 "You are a build status checker. "
                 "You are being evaluated on your ability to return valid, typed JSON. "
@@ -92,8 +89,12 @@ def main():
 
         elapsed = time.time() - start
 
-        # Extract token usage from OpenRouter response metadata
-        usage = response.response_metadata.get("token_usage", {})
+        # Unpack: parsed = typed object, raw = AIMessage with token metadata
+        parsed = result["parsed"]
+        raw_message = result["raw"]
+
+        # Extract token usage from the raw LangChain message
+        usage = raw_message.response_metadata.get("token_usage", {})
         prompt_tokens = usage.get("prompt_tokens", 0)
         completion_tokens = usage.get("completion_tokens", 0)
         call_tokens = prompt_tokens + completion_tokens
@@ -103,20 +104,20 @@ def main():
         cost = (prompt_tokens * 0.15 + completion_tokens * 0.60) / 1_000_000
         total_cost += cost
 
-        print(f"  Status:      {response.status}")
-        print(f"  Confidence:  {response.confidence:.0%}")
-        print(f"  Reason:      {response.explanation}")
+        print(f"  Status:      {parsed.status}")
+        print(f"  Confidence:  {parsed.confidence:.0%}")
+        print(f"  Reason:      {parsed.explanation}")
         print(f"  Tokens:      {call_tokens} ({prompt_tokens} in / {completion_tokens} out)")
         print(f"  Cost:        ${cost:.6f}")
         print(f"  Time:        {elapsed:.2f}s")
-        print(f"  Type:        {type(response).__name__} ← typed object, not a string!")
+        print(f"  Type:        {type(parsed).__name__} ← typed object, not a string!")
         print()
 
     # ─── Summary ───────────────────────────────────────────────
     print("=" * 60)
     print("  ✅ VERIFICATION PASSED")
     print(f"  Python:     {sys.version.split()[0]}")
-    print(f"  Model:      {MODEL}")
+    print(f"  Model:      {DEVBUDDY_MODEL}")
     print(f"  Total tokens: {total_tokens}")
     print(f"  Total cost:   ${total_cost:.6f}")
     print(f"  Date:       {datetime.now().isoformat()}")
