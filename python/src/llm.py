@@ -5,7 +5,10 @@ Uses LangChain's ChatOpenAI pointed at OpenRouter.
 One client. Any model. Swap by changing a string.
 """
 import os
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+
+load_dotenv()
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
