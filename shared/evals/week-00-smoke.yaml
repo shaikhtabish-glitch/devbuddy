@@ -1,61 +1,61 @@
-# Week 0 Smoke Test — Does the model return valid structured output?
+# Week 0 — Promptfoo Smoke Test
 #
+# A quick tour of what Promptfoo can do.
 # Run: npx promptfoo@latest eval --config week-00-smoke.yaml
 #
 # Prerequisites:
 #   export OPENROUTER_API_KEY=sk-or-your-key
 
-description: "Week 0 — Structured output smoke test"
+description: "Week 0 — Promptfoo tour: assertions, model comparison, cost"
 
+# ─── Example 1: Test against two models at once ──────────────
 providers:
-  - id: openrouter:{{env.DEVBUDDY_MODEL or "openai/gpt-4o-mini"}}
+  - id: openrouter:openai/gpt-4o-mini
+    label: gpt-4o-mini
+    config:
+      temperature: 0
+  - id: openrouter:google/gemini-2.0-flash-001
+    label: gemini-flash
     config:
       temperature: 0
 
+# ─── Example 2: A prompt with a variable ─────────────────────
 prompts:
   - |-
-    You are a build status checker. Return a JSON object with these fields:
-    - project: string (the project name)
-    - status: "passing" | "failing" | "in_progress" | "unknown"
-    - confidence: number between 0 and 1
-    - explanation: string (one sentence)
+    You are a helpful assistant. Answer in exactly one sentence.
+    Question: {{question}}
 
-    Check the build status of: {{project}}
-
-    Return ONLY valid JSON. No other text.
-
+# ─── Example 3: Assertions — does the output meet expectations? ─
 tests:
+  # Test: basic sanity — model responds at all
   - vars:
-      project: auth-service
+      question: "What is 2 + 2?"
     assert:
-      - type: contains-json
-      - type: javascript
-        value: |
-          const output = JSON.parse(output);
-          return output.project === "auth-service";
-      - type: javascript
-        value: |
-          const output = JSON.parse(output);
-          return ["passing", "failing", "in_progress", "unknown"].includes(output.status);
-      - type: javascript
-        value: |
-          const output = JSON.parse(output);
-          return typeof output.confidence === "number" && output.confidence >= 0 && output.confidence <= 1;
+      - type: contains
+        value: "4"
 
+  # Test: model stays on topic, not too long
   - vars:
-      project: api-gateway
+      question: "What color is the sky on a clear day?"
     assert:
-      - type: contains-json
-      - type: javascript
-        value: |
-          const output = JSON.parse(output);
-          return output.project === "api-gateway";
+      - type: not-contains
+        value: "I don't know"
+      - type: not-contains
+        value: "As an AI"
 
+  # Test: structured output via prompt (no Pydantic needed)
   - vars:
-      project: user-service
+      question: >-
+        Name one programming language.
+        Reply with ONLY valid JSON: {"language": "your answer"}
     assert:
       - type: contains-json
       - type: javascript
-        value: |
-          const output = JSON.parse(output);
-          return output.project === "user-service";
+        value: "JSON.parse(output).language.length > 0"
+
+  # Test: cost is tracked automatically
+  - vars:
+      question: "Say hello"
+    assert:
+      - type: cost
+        threshold: 0.01   # must cost less than 1 cent

@@ -131,7 +131,10 @@ Copy your terminal output and post it to `#devbuddy-series` with one sentence:
 
 ## Step 8: Verify Promptfoo (Optional)
 
-Promptfoo runs evals against your LLM outputs. Test it works now:
+Promptfoo runs evals against your LLM outputs. This smoke test demonstrates:
+- **Multi-model comparison** — same prompt, GPT-4o-mini vs Gemini Flash
+- **Assertions** — does the output contain "4"? Is it valid JSON?
+- **Cost tracking** — each test run shows token cost automatically
 
 ```bash
 cd ../shared/evals
@@ -139,7 +142,7 @@ export OPENROUTER_API_KEY=sk-or-your-key
 npx promptfoo@latest eval --config week-00-smoke.yaml
 ```
 
-You should see 3 passing tests — validates that the model returns structured JSON with correct fields.
+You'll see a table comparing both models across all 4 test cases — pass/fail, latency, and cost per call.
 
 ---
 
