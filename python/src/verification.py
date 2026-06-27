@@ -48,18 +48,21 @@ def main():
         response = llm.invoke([HumanMessage(content=question)])
         elapsed = time.time() - start
 
+        # Token usage from OpenRouter (actual cost available in OpenRouter dashboard)
         usage = response.usage_metadata or {}
         input_tokens = usage.get("input_tokens", 0) if hasattr(usage, "get") else 0
         output_tokens = usage.get("output_tokens", 0) if hasattr(usage, "get") else 0
         call_tokens = input_tokens + output_tokens
         total_tokens += call_tokens
 
+        # Estimated cost (GPT-4o-mini: $0.15/M input, $0.60/M output)
+        # For exact billing, check: https://openrouter.ai/activity
         cost = (input_tokens * 0.15 + output_tokens * 0.60) / 1_000_000
         total_cost += cost
 
         print(f"  Response:    {response.content.strip()}")
         print(f"  Tokens:      {call_tokens} ({input_tokens} in / {output_tokens} out)")
-        print(f"  Cost:        ${cost:.6f}")
+        print(f"  Cost:        ~${cost:.6f} (estimated — check OpenRouter dashboard for billing)")
         print(f"  Time:        {elapsed:.2f}s")
         print()
 
@@ -68,7 +71,7 @@ def main():
     print(f"  Python:        {sys.version.split()[0]}")
     print(f"  Model:         {DEVBUDDY_MODEL}")
     print(f"  Total tokens:  {total_tokens}")
-    print(f"  Total cost:    ${total_cost:.6f}")
+    print(f"  Total cost:    ~${total_cost:.6f} (estimated)")
     print(f"  Date:          {datetime.now().isoformat()}")
     print()
     print("  Your environment is ready for Week 1.")

@@ -97,10 +97,10 @@ def test_cost_tracking():
     assert input_tokens > 0, "❌ input_tokens is 0"
     assert output_tokens > 0, "❌ output_tokens is 0"
 
-    # Rough cost estimate
+    # Estimated cost (GPT-4o-mini pricing — check OpenRouter dashboard for billing)
     cost = (input_tokens * 0.15 + output_tokens * 0.60) / 1_000_000
 
-    print(f"  ✅ Cost tracked: {input_tokens}+{output_tokens} tokens, ~${cost:.6f}")
+    print(f"  ✅ Cost tracked: {input_tokens}+{output_tokens} tokens, ~${cost:.6f} (estimated)")
 
 
 # ─── Test 5: Model Swap (Optional) ────────────────────────────
