@@ -18,22 +18,16 @@ import time
 # __file__ is python/tests/test_integration.py, so parent is python/
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from dotenv import load_dotenv
-
-# Load .env from the python/ directory
-load_dotenv()
+from src.config import OPENROUTER_API_KEY, DEVBUDDY_MODEL, DEVBUDDY_MODEL_ALT
 
 # ─── Test 1: Environment ──────────────────────────────────────
 def test_env_configured():
     """Verify .env has the required variables."""
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    model = os.environ.get("DEVBUDDY_MODEL")
+    assert OPENROUTER_API_KEY is not None, "❌ OPENROUTER_API_KEY not set in .env"
+    assert "sk-or-" in OPENROUTER_API_KEY, "❌ OPENROUTER_API_KEY doesn't look like an OpenRouter key"
+    assert DEVBUDDY_MODEL is not None, "❌ DEVBUDDY_MODEL not set in .env"
 
-    assert api_key is not None, "❌ OPENROUTER_API_KEY not set in .env"
-    assert "sk-or-" in api_key, "❌ OPENROUTER_API_KEY doesn't look like an OpenRouter key"
-    assert model is not None, "❌ DEVBUDDY_MODEL not set in .env"
-
-    print(f"  ✅ .env configured: model={model}, key={'*' * 8}{api_key[-4:]}")
+    print(f"  ✅ .env configured: model={DEVBUDDY_MODEL}, key={'*' * 8}{OPENROUTER_API_KEY[-4:]}")
 
 
 # ─── Test 2: OpenRouter Connectivity ──────────────────────────
@@ -112,23 +106,22 @@ def test_cost_tracking():
 # ─── Test 5: Model Swap (Optional) ────────────────────────────
 def test_model_swap():
     """Verify a different model also works (runs if DEVBUDDY_MODEL_ALT is set)."""
-    alt_model = os.environ.get("DEVBUDDY_MODEL_ALT")
-    if not alt_model:
+    if not DEVBUDDY_MODEL_ALT:
         print("  ⏭️  Model swap skipped (set DEVBUDDY_MODEL_ALT in .env to test)")
         return
 
     from src.llm import get_llm
     from langchain_core.messages import HumanMessage
 
-    llm = get_llm(model=alt_model, temperature=0)
+    llm = get_llm(model=DEVBUDDY_MODEL_ALT, temperature=0)
     start = time.time()
     response = llm.invoke([HumanMessage(content="Say 'ok'")])
     elapsed = time.time() - start
 
-    assert response is not None, f"❌ No response from {alt_model}"
-    assert elapsed < 30, f"❌ {alt_model} took {elapsed:.0f}s"
+    assert response is not None, f"❌ No response from {DEVBUDDY_MODEL_ALT}"
+    assert elapsed < 30, f"❌ {DEVBUDDY_MODEL_ALT} took {elapsed:.0f}s"
 
-    print(f"  ✅ Model swap: {alt_model} responded in {elapsed:.1f}s")
+    print(f"  ✅ Model swap: {DEVBUDDY_MODEL_ALT} responded in {elapsed:.1f}s")
 
 
 # ─── Run All ──────────────────────────────────────────────────

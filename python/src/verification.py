@@ -27,9 +27,10 @@ from pydantic import BaseModel, Field
 from typing import Literal
 
 from src.llm import get_llm
+from src.config import DEVBUDDY_MODEL
 
 # ─── Configuration ─────────────────────────────────────────────
-MODEL = os.environ.get("DEVBUDDY_MODEL", "openai/gpt-4o-mini")
+MODEL = DEVBUDDY_MODEL
 
 # ─── Schema Definition ─────────────────────────────────────────
 # This is a preview of Week 2. Today you just see it work.
@@ -56,7 +57,7 @@ def main():
     print()
 
     try:
-        llm = get_llm(model=MODEL, temperature=0.0)
+        llm = get_llm(temperature=0.0)
     except ValueError as e:
         print(f"❌ {e}")
         sys.exit(1)
