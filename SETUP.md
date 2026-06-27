@@ -1,12 +1,11 @@
-# DevBuddy — Setup Guide (Python)
-
-Follow these steps to get DevBuddy running on your machine.
+# DevBuddy — Setup Guide
 
 ---
 
 ## Prerequisites
 
 - Python 3.11 or later (`python --version`)
+- Node.js 20 or later (`node --version`) — for Promptfoo evals (Week 7)
 - Git
 - An OpenRouter API key (check `#devbuddy-series` or contact the ops team)
 
@@ -18,7 +17,7 @@ Follow these steps to get DevBuddy running on your machine.
 # Via GitHub CLI
 gh repo fork org/devbuddy --clone
 
-# Or via GitHub UI: click Fork → Clone your fork
+# Or via GitHub UI: click Fork → then clone your fork
 git clone https://github.com/YOUR_USERNAME/devbuddy.git
 cd devbuddy
 ```
@@ -31,7 +30,7 @@ cd devbuddy
 git remote add upstream https://github.com/org/devbuddy.git
 ```
 
-Each week you'll run `git pull upstream main` to get the latest docs and data.
+Each week: `git pull upstream main` to get the latest.
 
 ---
 
@@ -40,8 +39,8 @@ Each week you'll run `git pull upstream main` to get the latest docs and data.
 ```bash
 cd python
 python -m venv .venv
-source .venv/bin/activate   # macOS/Linux
-# .venv\Scripts\activate    # Windows
+source .venv/bin/activate        # macOS/Linux
+# .venv\Scripts\activate         # Windows
 
 pip install -r requirements.txt
 ```
@@ -60,7 +59,7 @@ Edit `.env` and add your OpenRouter API key:
 OPENROUTER_API_KEY=sk-or-your-actual-key
 ```
 
-**Never commit `.env` to git.** It's in `.gitignore`.
+**Never commit `.env`.** It's in `.gitignore`.
 
 ---
 
@@ -70,7 +69,7 @@ OPENROUTER_API_KEY=sk-or-your-actual-key
 python src/verification.py
 ```
 
-You should see output like:
+Expected output:
 
 ```
 ============================================================
@@ -105,17 +104,9 @@ Copy your terminal output and post it to `#devbuddy-series` with one sentence:
 
 | Problem | Fix |
 |---------|-----|
-| `OPENROUTER_API_KEY not set` | Did you copy `.env.example` to `.env`? Did you add your key? Are you running from the `python/` directory? |
-| `ModuleNotFoundError: langchain_openai` | Run `pip install -r requirements.txt` from the `python/` directory |
-| `ModuleNotFoundError: src` | You must run from the `python/` directory: `cd python && python src/verification.py` |
-| `python: command not found` | Use `python3` instead, or install Python 3.11+ |
-| Verification script times out | Check your network. OpenRouter may be rate-limited on shared keys. |
-| Anything else | Post in `#devbuddy-series`. Don't DM — public debugging builds shared knowledge. |
-
----
-
-## What's Next
-
-- Week 1 is the kick-off session. You'll see the full DevBuddy architecture.
-- The verification script you just ran is a microcosm of what DevBuddy becomes.
-- Each week: `cd python && git pull upstream main`, read `../docs/week-NN.md`, build in `src/`.
+| `OPENROUTER_API_KEY not set` | Did you copy `.env.example` to `.env`? Add your key? Running from `python/`? |
+| `ModuleNotFoundError: langchain_openai` | `pip install -r requirements.txt` from `python/` |
+| `ModuleNotFoundError: src` | You must run from `python/`: `cd python && python src/verification.py` |
+| `python: command not found` | Try `python3`, or install Python 3.11+ |
+| Script times out | Check network. Shared sandbox keys may be rate-limited. |
+| Anything else | Post in `#devbuddy-series`. Public debugging builds shared knowledge. |
