@@ -53,9 +53,9 @@ tests:
       - type: javascript
         value: "JSON.parse(output).language.length > 0"
 
-  # Test: cost is tracked automatically
+  # Test: Promptfoo tracks cost and latency automatically
   - vars:
       question: "Say hello"
     assert:
-      - type: cost
-        threshold: 0.01   # must cost less than 1 cent
+      - type: latency
+        threshold: 10000   # must respond within 10 seconds

@@ -134,7 +134,8 @@ Copy your terminal output and post it to `#devbuddy-series` with one sentence:
 Promptfoo runs evals against your LLM outputs. This smoke test demonstrates:
 - **Multi-model comparison** — same prompt, GPT-4o-mini vs Gemini Flash
 - **Assertions** — does the output contain "4"? Is it valid JSON?
-- **Cost tracking** — each test run shows token cost automatically
+- **Latency tracking** — response time measured per call
+- **Cost tracking** — token cost shown per call (automatic, no assertion needed)
 
 ```bash
 cd ../shared/evals
