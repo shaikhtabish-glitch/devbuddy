@@ -95,7 +95,33 @@ Expected output:
 
 ---
 
-## Step 6: Post to the Channel
+## Step 6: Run the Integration Test
+
+```bash
+python tests/test_integration.py
+```
+
+This validates everything end-to-end:
+
+```
+============================================================
+  DevBuddy Integration Test — Week 0
+============================================================
+
+  ✅ .env configured: model=openai/gpt-4o-mini, key=********i7U9
+  ✅ OpenRouter connected: 1.2s, tokens=15+3
+  ✅ Structured output: SmokeTest(status='ok')
+  ✅ Cost tracked: 18+5 tokens, ~$0.000006
+  ⏭️  Model swap skipped (set DEVBUDDY_MODEL_ALT in .env to test)
+
+============================================================
+  ✅ ALL 5 TESTS PASSED
+============================================================
+```
+
+---
+
+## Step 7: Post to the Channel
 
 Copy your terminal output and post it to `#devbuddy-series` with one sentence:
 
@@ -103,7 +129,7 @@ Copy your terminal output and post it to `#devbuddy-series` with one sentence:
 
 ---
 
-## Step 7: Verify Promptfoo (Optional)
+## Step 8: Verify Promptfoo (Optional)
 
 Promptfoo runs evals against your LLM outputs. Test it works now:
 
