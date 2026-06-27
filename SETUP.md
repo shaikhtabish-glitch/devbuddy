@@ -79,17 +79,36 @@ Expected output:
   DevBuddy Verification — Week 0
 ============================================================
 
-[1/3] Checking: auth-service...
-  Status:      passing
-  Confidence:  30%
-  Reason:      I don't have real CI access...
-  Tokens:      147 (102 in / 45 out)
-  Cost:        $0.000042
-  Time:        1.23s
-  Type:        BuildCheck ← typed object, not a string!
+[1/3] Asking: Say 'connected' in exactly one word.
+  Response:    connected
+  Tokens:      19 (16 in / 3 out)
+  Cost:        ~$0.000004 (estimated — check OpenRouter dashboard for billing)
+  Time:        2.12s
+
+[2/3] Asking: What is 2 + 2? Answer with just the number.
+  Response:    4
+  Tokens:      23 (21 in / 2 out)
+  Cost:        ~$0.000004 (estimated — check OpenRouter dashboard for billing)
+  Time:        0.76s
+
+[3/3] Asking: Name one programming language in one word.
+  Response:    Python
+  Tokens:      17 (15 in / 2 out)
+  Cost:        ~$0.000003 (estimated — check OpenRouter dashboard for billing)
+  Time:        0.58s
 
 ============================================================
   ✅ VERIFICATION PASSED
+  Python:        3.13.5
+  Model:         openai/gpt-4o-mini
+  Total tokens:  59
+  Total cost:    ~$0.000012 (estimated)
+  Date:          2026-06-27T21:04:17
+
+  Post this output to #devbuddy-series to confirm.
+
+  What do you want DevBuddy to help you with?
+  _______________________________________________
 ============================================================
 ```
 
@@ -111,7 +130,7 @@ This validates everything end-to-end:
   ✅ .env configured: model=openai/gpt-4o-mini, key=********i7U9
   ✅ OpenRouter connected: 1.2s, tokens=15+3
   ✅ Structured output: SmokeTest(status='ok')
-  ✅ Cost tracked: 18+5 tokens, ~$0.000006
+  ✅ Cost tracked: 18+5 tokens, ~$0.000006 (estimated)
   ⏭️  Model swap skipped (set DEVBUDDY_MODEL_ALT in .env to test)
 
 ============================================================
