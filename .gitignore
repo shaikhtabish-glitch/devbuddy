@@ -1,0 +1,16 @@
+# DevBuddy
+
+__pycache__/
+*.pyc
+.venv/
+.env
+.DS_Store
+reports/
+
+# Per-language venvs
+python/.venv/
+python/.env
+java/.gradle/
+java/build/
+nodejs/node_modules/
+nodejs/.env
