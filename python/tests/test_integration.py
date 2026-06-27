@@ -13,6 +13,11 @@ Run: python tests/test_integration.py
 import os
 import sys
 import time
+
+# Ensure src/ is importable (Python 3.12+ doesn't auto-add CWD)
+# __file__ is python/tests/test_integration.py, so parent is python/
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from dotenv import load_dotenv
 
 # Load .env from the python/ directory

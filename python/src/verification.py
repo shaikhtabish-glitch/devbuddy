@@ -18,6 +18,10 @@ import sys
 import time
 from datetime import datetime
 
+# Ensure src/ is importable (Python 3.12+ doesn't auto-add CWD)
+# __file__ is python/src/verification.py, so parent is python/
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 from typing import Literal
