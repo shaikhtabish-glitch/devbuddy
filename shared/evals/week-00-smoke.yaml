@@ -8,7 +8,7 @@
 description: "Week 0 — Structured output smoke test"
 
 providers:
-  - id: openrouter:openai/gpt-4o-mini
+  - id: openrouter:{{env.DEVBUDDY_MODEL or "openai/gpt-4o-mini"}}
     config:
       temperature: 0
 

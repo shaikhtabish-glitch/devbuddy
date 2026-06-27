@@ -57,7 +57,10 @@ Edit `.env` and add your OpenRouter API key:
 
 ```
 OPENROUTER_API_KEY=sk-or-your-actual-key
+DEVBUDDY_MODEL=openai/gpt-4o-mini
 ```
+
+Change `DEVBUDDY_MODEL` to any OpenRouter model string (`anthropic/claude-sonnet`, `google/gemini-flash`, etc.).
 
 **Never commit `.env`.** It's in `.gitignore`.
 

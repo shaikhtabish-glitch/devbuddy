@@ -8,7 +8,6 @@ import os
 from langchain_openai import ChatOpenAI
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-DEFAULT_MODEL = "openai/gpt-4o-mini"
 
 
 def get_llm(model: str | None = None, temperature: float = 0.0) -> ChatOpenAI:
@@ -31,7 +30,7 @@ def get_llm(model: str | None = None, temperature: float = 0.0) -> ChatOpenAI:
         )
 
     return ChatOpenAI(
-        model=model or DEFAULT_MODEL,
+        model=model or os.environ.get("DEVBUDDY_MODEL", "openai/gpt-4o-mini"),
         base_url=OPENROUTER_BASE,
         api_key=api_key,
         temperature=temperature,
