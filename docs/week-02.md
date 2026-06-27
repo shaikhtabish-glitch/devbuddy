@@ -4,6 +4,23 @@
 
 ---
 
+## Setup
+
+```bash
+cd python
+source .venv/bin/activate
+git pull upstream main          # get latest code + test data
+pip install -r requirements-dev.txt   # install pytest
+```
+
+Verify you're ready:
+
+```bash
+python -m pytest tests/ -v      # should show 10 tests, all passing
+```
+
+---
+
 ## What You'll Build
 
 Open `src/schemas.py`. Currently a stub. By the end of this session, it will:
