@@ -100,6 +100,20 @@ Copy your terminal output and post it to `#devbuddy-series` with one sentence:
 
 ---
 
+## Step 7: Verify Promptfoo (Optional)
+
+Promptfoo runs evals against your LLM outputs. Test it works now:
+
+```bash
+cd ../shared/evals
+export OPENROUTER_API_KEY=sk-or-your-key
+npx promptfoo@latest eval --config week-00-smoke.yaml
+```
+
+You should see 3 passing tests — validates that the model returns structured JSON with correct fields.
+
+---
+
 ## Troubleshooting
 
 | Problem | Fix |
