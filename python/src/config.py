@@ -17,9 +17,11 @@ OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 DEVBUDDY_MODEL = os.environ.get("DEVBUDDY_MODEL", "openai/gpt-4o-mini")
 DEVBUDDY_MODEL_ALT = os.environ.get("DEVBUDDY_MODEL_ALT")  # optional, for swap tests
 
-# ─── Validation ──────────────────────────────────────────────
-if not OPENROUTER_API_KEY:
-    raise ValueError(
-        "OPENROUTER_API_KEY not set.\n"
-        "Copy .env.example to .env and add your key."
-    )
+
+def validate() -> None:
+    """Raise ValueError if required config is missing. Callers invoke this explicitly."""
+    if not OPENROUTER_API_KEY:
+        raise ValueError(
+            "OPENROUTER_API_KEY not set.\n"
+            "Copy .env.example to .env and add your key."
+        )

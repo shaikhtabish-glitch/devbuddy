@@ -5,7 +5,7 @@ Uses LangChain's ChatOpenAI pointed at OpenRouter.
 One client. Any model. Swap by changing DEVBUDDY_MODEL in .env.
 """
 from langchain_openai import ChatOpenAI
-from src.config import OPENROUTER_API_KEY, OPENROUTER_BASE, DEVBUDDY_MODEL
+from src.config import OPENROUTER_API_KEY, OPENROUTER_BASE, DEVBUDDY_MODEL, validate
 
 
 def get_llm(model: str | None = None, temperature: float = 0.0) -> ChatOpenAI:
@@ -15,7 +15,11 @@ def get_llm(model: str | None = None, temperature: float = 0.0) -> ChatOpenAI:
     Args:
         model: OpenRouter model string. Defaults to DEVBUDDY_MODEL from .env.
         temperature: 0.0 for deterministic, higher for creative.
+
+    Raises:
+        ValueError: If OPENROUTER_API_KEY is not configured.
     """
+    validate()
     return ChatOpenAI(
         model=model or DEVBUDDY_MODEL,
         base_url=OPENROUTER_BASE,
