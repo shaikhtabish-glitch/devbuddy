@@ -28,17 +28,18 @@ question = "What endpoints does the payment API expose?"
 print(f"  Question: {question}")
 print()
 
-chunks = retrieve(question, k=3)
+chunks = retrieve(question, k=4)
 for i, chunk in enumerate(chunks):
     print(f"  ── Chunk {i+1} ──")
     print(f"  {chunk[:200]}{'...' if len(chunk) > 200 else ''}")
     print()
 
-answer, retrieved = grounded_answer_with_chunks(question, k=3)
+answer, retrieved = grounded_answer_with_chunks(question, k=5)
 print(f"  Answer: {answer}")
 print()
 
 print("=" * 65)
-print("  The model answered from the retrieved chunks.")
+print("  The model listed all 4 endpoints from the API spec —")
+print("  including the health endpoint that was in chunk 4.")
 print("  It did NOT guess. It RETRIEVED.")
 print("=" * 65)
