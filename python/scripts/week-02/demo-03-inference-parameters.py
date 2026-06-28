@@ -43,7 +43,7 @@ for temp in [0.0, 0.3, 0.7, 1.0]:
     result = analyze_pr(PR_TITLE, PR_DIFF, temperature=temp)
     print(f"  temp={temp} ({label}):")
     print(f"    severity={result.severity}")
-    print(f"    summary=\"{result.summary[:70]}...\"")
+    print(f"    summary=\"{result.summary}\"")
     print()
 
 print("  This diff has NO trigger keywords (no auth, payments, security).")
@@ -67,7 +67,7 @@ for limit in [200, 50, 15, 8]:
         result = analyze_pr(PR_TITLE, PR_DIFF, temperature=0.0, max_tokens=limit)
         print(f"  max_tokens={limit:>3}: ✅ {result.severity}")
     except Exception as e:
-        msg = str(e)[:80].replace("\n", " ")
+        msg = str(e).replace("\n", " ")
         print(f"  max_tokens={limit:>3}: ❌ {msg}")
 
 print()

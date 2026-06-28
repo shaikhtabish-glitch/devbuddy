@@ -59,8 +59,8 @@ for temp in [0.0, 0.5, 1.0]:
         files = data["technical"]["files_changed"]
         print(f"  temp={temp}: ✅ extracted → severity={sev}, ticket={ticket}, files={files}")
     except json.JSONDecodeError:
-        preview = raw[:80].replace("\n", " ")
-        print(f"  temp={temp}: ❌ Parse failed → {preview}...")
+        print(f"  temp={temp}: ❌ Parse failed. Raw output:")
+        print(f"    {raw}")
     except (KeyError, TypeError) as e:
         print(f"  temp={temp}: ⚠️ Valid JSON but missing field: {e}")
     print()
