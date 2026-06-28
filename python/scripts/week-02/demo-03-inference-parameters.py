@@ -13,12 +13,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from src.schemas import analyze_pr
 from src.llm import get_llm
 
-PR_TITLE = "Refactor shared validation in auth module"
+PR_TITLE = "Consolidate error handling across user profile module"
 PR_DIFF  = (
-    "Extracted token validation from auth.py into a new shared validate.py utility.\n"
-    "Updated inline error messages for clarity. No behavior changes.\n"
-    "Added doc examples for the new error format.\n"
-    "Files: src/auth.py (-40 lines), src/validate.py (+55 lines, new), docs/auth-errors.md"
+    "Moved duplicate try/except blocks from 6 profile endpoints into a shared\n"
+    "error_handler.py decorator. No behavior changes — same errors, same messages.\n"
+    "Added unit tests for the new decorator. This is prep work for the v2 profiles API.\n"
+    "Files: src/profiles/error_handler.py (+80, new), src/profiles/views.py (-120),\n"
+    "       tests/test_error_handler.py (+45, new)"
 )
 
 print("=" * 65)
@@ -45,12 +46,12 @@ for temp in [0.0, 0.3, 0.7, 1.0]:
     print(f"    summary=\"{result.summary[:70]}...\"")
     print()
 
-print("  Why this diff? Auth → 'critical' per system prompt.")
-print("  But it's a refactor with docs → could be 'medium' or 'low'.")
-print("  temp=0.0 → picks one answer, sticks to it.")
-print("  temp=0.7 → may flip between 'critical' and 'medium'.")
-print("  temp=1.0 → explores wider: 'low' (docs), 'critical' (auth), 'high' (logic).")
-print("  Key: Pydantic guarantees VALIDITY. Temperature controls CREATIVITY.")
+print("  This diff has NO trigger keywords (no auth, payments, security).")
+print("  Severity is a judgment call: refactor? feature? cleanup?")
+print("  temp=0.0 → picks one answer, sticks to it every run.")
+print("  temp=0.7 → may flip between 'medium' and 'low' across runs.")
+print("  temp=1.0 → wider exploration. Same diff, different verdicts.")
+print("  Key: Pydantic guarantees VALIDITY. Temperature controls JUDGMENT.")
 print()
 
 # ═══════════════════════════════════════════════════════════════
