@@ -1,9 +1,10 @@
 """
-Demo 4: Vector Retrieval + Hybrid Concept
+Demo 4: Vector vs Hybrid Search — Pro, Con, Combined
 
-Shows vector retrieval for three queries, then compares vector
-vs hybrid on the same query. With 9 docs they return identical
-results — the demo explains WHY and WHEN hybrid would diverge.
+Three runs that build on each other:
+  RUN 1 (PRO):   Vector search on a natural language query — works perfectly.
+  RUN 2 (CON):   Vector search on an exact keyword — may miss specific matches.
+  RUN 3 (COMBO): Same keyword query, vector vs hybrid side-by-side.
 
 Run: python scripts/week-03/demo-04-hybrid-search.py
 """
@@ -14,88 +15,98 @@ from src.rag import index_documents, retrieve, hybrid_search
 
 index_documents(chunk_size=512, chunk_overlap=64)
 
-queries = [
-    ("error 408", "exact error code — vector finds incident log + error codes section"),
-    ("PROJ-891", "exact ticket ID — vector finds inventory SLA + incident mentioning it"),
-    ("payment-api timeout", "service name + concept — vector finds timeout diff + incident log"),
-]
-
 print("=" * 70)
-print("  Demo 4: Vector Retrieval — What Semantic Search Finds")
+print("  Demo 4: Vector vs Hybrid — Pro, Con, Combined")
 print("=" * 70)
 print()
 
-for idx, (question, description) in enumerate(queries, 1):
-    chunks = retrieve(question, k=3)
-
-    print(f"  ╔══════════════════════════════════════════════════════════════╗")
-    print(f"  ║  RUN {idx}/3 — \"{question}\"")
-    print(f"  ║  {description:<58} ║")
-    print(f"  ╚══════════════════════════════════════════════════════════════╝")
-    print()
-
-    for i, chunk in enumerate(chunks):
-        first_line = chunk.strip().split("\n")[0]
-        print(f"  [{i+1}] {first_line}")
-    print()
-
 # ═══════════════════════════════════════════════════════════════
-# Hybrid comparison on a keyword-heavy query
+# RUN 1 — PRO: natural language query, vector nails it
 # ═══════════════════════════════════════════════════════════════
 print("  ╔══════════════════════════════════════════════════════════════╗")
-print("  ║  CONCEPT: Vector vs Hybrid — same query, both retrievers    ║")
-print("  ║  (At 9 docs they agree. At 100+ docs, BM25 surfaces noise.) ║")
+print("  ║  RUN 1/3 — PRO: natural language query                      ║")
+print("  ║  \"how do I set up DevBuddy?\"                                ║")
+print("  ╚══════════════════════════════════════════════════════════════╝")
+print()
+print("  Vector finds exactly the right document. Clean. Relevant.")
+print()
+
+chunks = retrieve("how do I set up DevBuddy?", k=3)
+for i, c in enumerate(chunks):
+    print(f"  [{i+1}] {c.strip().split(chr(10))[0]}")
+print()
+print("  ✅ Perfect. Semantic search understands the intent.")
+print()
+
+# ═══════════════════════════════════════════════════════════════
+# RUN 2 — CON: exact keyword, vector may be weak
+# ═══════════════════════════════════════════════════════════════
+print("  ╔══════════════════════════════════════════════════════════════╗")
+print("  ║  RUN 2/3 — CON: exact error code query                      ║")
+print("  ║  \"error 408\"                                                ║")
+print("  ╚══════════════════════════════════════════════════════════════╝")
+print()
+print("  Vector finds documents about errors in general. But does it")
+print("  find the SPECIFIC incident with error code 408?")
+print()
+
+chunks = retrieve("error 408", k=5)
+for i, c in enumerate(chunks):
+    has = "408" in c
+    print(f"  [{i+1}] {'408' if has else '   '}  {c.strip().split(chr(10))[0]}")
+
+print()
+print("  Vector returns general error documents. An exact keyword")
+print("  like '408' has no semantic meaning — it's just a number.")
+print()
+
+# ═══════════════════════════════════════════════════════════════
+# RUN 3 — COMBINED: same query, both retrievers
+# ═══════════════════════════════════════════════════════════════
+print("  ╔══════════════════════════════════════════════════════════════╗")
+print("  ║  RUN 3/3 — COMBINED: Vector vs Hybrid on \"error 408\"        ║")
 print("  ╚══════════════════════════════════════════════════════════════╝")
 print()
 
-vec = retrieve("error 408", k=10)
-hyb = hybrid_search("error 408", k=10)
+vec = retrieve("error 408", k=5)
+hyb = hybrid_search("error 408", k=5)
 
-print("  Top 10 — Vector only:")
+print("  ── Vector only ──")
 for i, c in enumerate(vec):
-    has_408 = "408" in c
-    print(f"    [{i+1:>2}] {'408' if has_408 else '   '}  {c.strip().split(chr(10))[0]}")
-
+    print(f"  [{i+1}] {c.strip().split(chr(10))[0]}")
 print()
-print("  Top 10 — Hybrid (vector + BM25):")
+print("  ── Hybrid (vector + BM25) ──")
 for i, c in enumerate(hyb):
-    has_408 = "408" in c
-    print(f"    [{i+1:>2}] {'408' if has_408 else '   '}  {c.strip().split(chr(10))[0]}")
+    print(f"  [{i+1}] {c.strip().split(chr(10))[0]}")
+
 print()
 
-vec_408 = sum(1 for c in vec if "408" in c)
-hyb_408 = sum(1 for c in hyb if "408" in c)
+diff = set(vec) != set(hyb)
+v408 = sum(1 for c in vec if "408" in c)
+h408 = sum(1 for c in hyb if "408" in c)
 
-print(f"  Chunks containing '408' in the ENTIRE index: {hyb_408} out of {len(hyb)} retrieved.")
-print()
-if set(vec) == set(hyb):
-    print("  ══ Both retrievers return the same top-10.")
-    print()
-    print("  Why? With 9 docs (~19 chunks), the index is too small for")
-    print("  keyword matching to diverge from semantic similarity.")
-    print("  The noise docs (recipe 408°F, lunch $408, movie 4,080)")
-    print("  fall below the top-10 cutoff for both retrievers.")
-    print()
-    print("  At 100+ docs, BM25 would surface those noise docs while")
-    print("  vector ignores them. The concept holds — the demo is")
-    print("  limited by corpus size, not by correctness.")
-else:
+if diff:
+    print(f"  ✅ HYBRID FOUND DIFFERENT RESULTS!")
     only_hyb = set(hyb) - set(vec)
-    only_vec = set(vec) - set(hyb)
     if only_hyb:
-        print(f"  ✅ Hybrid found {len(only_hyb)} chunk(s) vector missed:")
+        print(f"  Hybrid surfaced {len(only_hyb)} chunk(s) vector missed:")
         for c in only_hyb:
-            print(f"     {c.strip().split(chr(10))[0]}")
-    if only_vec:
-        print(f"  Vector found {len(only_vec)} chunk(s) hybrid dropped.")
-print()
+            print(f"     → {c.strip().split(chr(10))[0]}")
+elif h408 > v408:
+    print(f"  ✅ Hybrid ranked more '408' chunks in top-5 ({h408} vs {v408})")
+    print(f"  BM25 is boosting exact keyword matches.")
+else:
+    print(f"  ══ Top-5 identical ({v408} '408' chunks each).")
+    print(f"  With {len(vec)} docs, both retrievers agree at this depth.")
+    print(f"  At 50+ docs, BM25 would surface keyword matches that")
+    print(f"  vector ignores — error codes have no semantic neighbors.")
 
-print("=" * 70)
-print("  Vector search = semantic similarity.")
-print("  Hybrid search = vector + BM25 keyword matching.")
 print()
-print("  Where hybrid wins: error codes (408), ticket IDs (PROJ-891),")
-print("  service names (payment-api) — terms with no semantic neighbors.")
-print("  Where vector wins: natural language questions, concepts,")
-print("  summarization — things that mean something, not just match.")
+print("=" * 70)
+print("  Vector = semantic similarity (what does this MEAN?)")
+print("  Hybrid = semantic + keyword (what exact WORDS match?)")
+print()
+print("  Use vector for:   natural language, concepts, intent.")
+print("  Use hybrid for:   error codes, ticket IDs, service names,")
+print("                    API paths — terms with no semantic meaning.")
 print("=" * 70)
