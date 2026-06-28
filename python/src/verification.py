@@ -57,6 +57,7 @@ def main():
 
         # Estimated cost (GPT-4o-mini: $0.15/M input, $0.60/M output)
         # For exact billing, check: https://openrouter.ai/activity
+        #TODO check langchain documentation to remove this hardcoding
         cost = (input_tokens * 0.15 + output_tokens * 0.60) / 1_000_000
         total_cost += cost
 
