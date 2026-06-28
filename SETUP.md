@@ -54,7 +54,7 @@ Qdrant is the vector database for RAG. Start it with Docker:
 
 ```bash
 cd devbuddy   # repo root (where docker-compose.yml lives)
-docker compose up -d
+docker-compose up -d   # or 'docker compose up -d' if you have the compose plugin
 ```
 
 Verify it's running:

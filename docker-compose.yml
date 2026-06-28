@@ -4,9 +4,9 @@
 # Dashboard available at http://localhost:6333/dashboard
 #
 # Usage:
-#   docker compose up -d          # start
-#   docker compose down           # stop
-#   docker compose down -v        # stop and delete all data
+#   docker-compose up -d          # start (use 'docker compose' if plugin installed)
+#   docker-compose down           # stop
+#   docker-compose down -v        # stop and delete all data
 
 services:
   qdrant:

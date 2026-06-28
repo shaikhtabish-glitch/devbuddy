@@ -11,7 +11,7 @@
 cd devbuddy && git pull upstream main
 
 # 2. Start Qdrant vector database (required for Week 3+)
-docker compose up -d
+docker-compose up -d   # or 'docker compose up -d' if you have the plugin
 curl http://localhost:6333/healthz  # → healthz check passed
 # Dashboard: http://localhost:6333/dashboard
 
@@ -46,7 +46,7 @@ Open `src/rag.py`. It already contains a full RAG pipeline:
 - `grounded_answer(query, k, temperature)` — retrieve → inject into prompt → LLM answer
 - `grounded_answer_with_chunks(query, k, temperature)` — returns answer + chunks for transparency
 
-**Vector store:** Qdrant — runs in Docker (`docker compose up -d`). Production-grade, cross-language (Python/Node.js/Java). Dashboard at http://localhost:6333/dashboard.
+**Vector store:** Qdrant — runs in Docker (`docker-compose up -d`). Production-grade, cross-language (Python/Node.js/Java). Dashboard at http://localhost:6333/dashboard.
 
 **Embeddings:** `all-MiniLM-L6-v2` via `langchain-huggingface` — local, free, no API cost. Downloaded once on first use (~80MB).
 
@@ -219,7 +219,7 @@ With 8 documents, the top-5 may be identical. With 50+ docs, BM25 surfaces keywo
 | Problem | Fix |
 |---------|-----|
 | `RuntimeError: No index found` | Run `index_documents()` first |
-| `ConnectionError` on Qdrant | `docker compose up -d` from repo root, then `curl localhost:6333/healthz` |
+| `ConnectionError` on Qdrant | `docker-compose up -d` from repo root (or `docker compose up -d`), then `curl localhost:6333/healthz` |
 | Embedding model slow first run | ~80MB download. Let it finish. Subsequent runs are instant. |
 | `pip install` fails | Make sure you're in `python/` with `.venv` activated |
 
