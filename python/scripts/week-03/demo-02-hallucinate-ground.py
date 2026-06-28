@@ -12,7 +12,7 @@ Run: python scripts/week-03/demo-02-hallucinate-ground.py
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.rag import index_documents, retrieve, hybrid_search, grounded_answer_with_chunks
+from src.rag import index_documents, grounded_answer_with_chunks
 
 print("=" * 65)
 print("  Demo 2: Out-of-Corpus vs In-Corpus")
@@ -46,37 +46,22 @@ print()
 print("  Step 2 — In-corpus question")
 print()
 
-grounded_question = "What's the SLA for the inventory service?"
+grounded_question = "How do I contribute code to DevBuddy?"
 
-# Pure vector retrieval — may include irrelevant chunks
-vec_chunks = retrieve(grounded_question, k=3)
-# Hybrid retrieval — BM25 keyword matching filters out noise
-hyb_chunks = hybrid_search(grounded_question, k=3)
+answer, chunks = grounded_answer_with_chunks(grounded_question, k=3)
 
 print(f"  Question: {grounded_question}")
 print()
-print(f"  Vector-only retrieved {len(vec_chunks)} chunks:")
-for i, chunk in enumerate(vec_chunks):
-    relevant = "SLA" in chunk or "inventory" in chunk.lower()
-    print(f"    [{i+1}] {'✅' if relevant else '❌'} {chunk[:100]}...")
-
+print(f"  Retrieved {len(chunks)} chunks:")
+for i, chunk in enumerate(chunks):
+    source = chunk.strip().split("\n")[0][:60]
+    print(f"    [{i+1}] {source}...")
 print()
-print(f"  Hybrid (vector+BM25) retrieved {len(hyb_chunks)} chunks:")
-for i, chunk in enumerate(hyb_chunks):
-    relevant = "SLA" in chunk or "inventory" in chunk.lower()
-    print(f"    [{i+1}] {'✅' if relevant else '❌'} {chunk[:100]}...")
-
-print()
-answer = grounded_answer_with_chunks(grounded_question, k=3)[0]
 print(f"  Answer: {answer}")
 print()
 print("=" * 65)
 print("  Out-of-corpus → model declines (no hallucination).")
-print("  In-corpus     → model retrieves and answers correctly.")
-print()
-print("  Notice chunk 3: it contains 'SLA' but for the PAYMENT API,")
-print("  not the inventory service. The model correctly distinguished")
-print("  between them. This is the 'relevant-looking chunk that")
-print("  could mislead' scenario — retrieval isn't perfect, but")
-print("  a good system prompt keeps the model honest.")
+print("  In-corpus     → model answers from CONTRIBUTING.md.")
+print("  Clean retrieval. Clean answer. Grounding works.")
+print("=" * 65)
 print("=" * 65)
