@@ -25,7 +25,9 @@ for size in [256, 512, 1024]:
     chunks = retrieve(question, k=3)
     print(f"  chunk_size={size} ({count} chunks indexed):")
     for i, chunk in enumerate(chunks):
-        print(f"    [{i+1}] ({len(chunk)} chars) {chunk[:150]}...")
+        print(f"    [{i+1}] ({len(chunk)} chars)")
+        print(f"    {chunk}")
+        print()
     print()
 
 print("=" * 65)
