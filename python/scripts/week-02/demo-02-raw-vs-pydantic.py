@@ -140,10 +140,8 @@ def run_demo():
 
     print(f"  Raw response ({len(raw_text)} chars):")
     print("  " + "-" * 55)
-    for line in raw_text[:400].split("\n"):
+    for line in raw_text.split("\n"):
         print(f"  | {line}")
-    if len(raw_text) > 400:
-        print(f"  | ... ({len(raw_text) - 400} more chars)")
     print("  " + "-" * 55)
     print()
 
@@ -176,14 +174,11 @@ def run_demo():
         # Show the raw output so the audience can see what went wrong
         print(f"  Raw output that failed to parse:")
         print("  " + "-" * 55)
-        for line in raw_text[:500].split("\n"):
-            # Highlight markdown backticks
+        for line in raw_text.split("\n"):
             if line.strip().startswith("```"):
                 print(f"  | ⚠️  {line}")
             else:
                 print(f"  | {line}")
-        if len(raw_text) > 500:
-            print(f"  | ... ({len(raw_text) - 500} more chars)")
         print("  " + "-" * 55)
         print()
         print("     THIS IS THE PROBLEM: a single malformed response")
@@ -215,12 +210,12 @@ def run_demo():
     print(f"    change.type:              {pydantic_result.change.type}")
     print(f"    change.severity:          {pydantic_result.change.severity}")
     print(f"    change.ticket:            {pydantic_result.change.ticket}")
-    print(f"    details.summary:          {pydantic_result.details.summary[:60]}...")
-    print(f"    details.root_cause:       {pydantic_result.details.root_cause[:60]}...")
+    print(f"    details.summary:          {pydantic_result.details.summary}")
+    print(f"    details.root_cause:       {pydantic_result.details.root_cause}")
     print(f"    details.user_impact_pct:  {pydantic_result.details.user_impact_pct} (type: {type(pydantic_result.details.user_impact_pct).__name__})")
     print(f"    technical.files_changed:  {pydantic_result.technical.files_changed}")
     print(f"    technical.db_changed:     {pydantic_result.technical.db_changed}")
-    print(f"    technical.rollback:       {pydantic_result.technical.rollback[:40]}...")
+    print(f"    technical.rollback:       {pydantic_result.technical.rollback}")
     print()
 
     # Print the full Pydantic result as JSON for comparison
