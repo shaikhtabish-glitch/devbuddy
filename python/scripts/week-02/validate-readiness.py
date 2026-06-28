@@ -44,40 +44,41 @@ print(f"       evidence       = {len(report.evidence)} chunks")
 print(f"     )")
 
 print()
-print("=" * 70)
-print("  TAKE-HOME ASSIGNMENT")
-print("=" * 70)
-print()
-print("  PART A — Load the other two scenarios:")
-print("    1. Extend this script to also load and validate:")
-print("       shared/data/service-readiness-degraded.json")
-print("       shared/data/service-readiness-unknown.json")
-print("    2. Add the same tests to tests/test_schemas.py")
-print("       (follow the healthy example that's already there)")
-print()
-print("  PART B — LLM integration:")
-print("    Use src.schemas.generate_readiness_report() to feed")
-print("    the mock data to the LLM and get back a typed report.")
-print("    Example:")
-print()
-print("      import json")
-print("      from src.schemas import generate_readiness_report")
-print()
-print("      with open('../shared/data/service-readiness-healthy.json') as f:")
-print("          data = json.load(f)")
-print()
-print("      report = generate_readiness_report(")
-print("          service_name=data['service']['name'],")
-print("          build_data=data['build'],")
-print("          deploy_data=data['deployment'],")
-print("          temperature=0.0,")
-print("      )")
-print()
-print("      # report is a typed ServiceReadinessReport — no parsing needed!")
-print("      print(report.model_dump_json(indent=2))")
-print("      print(f'Cost: check OpenRouter dashboard')")
-print()
-print("    Run this for all 3 scenarios. Compare the LLM's verdict")
-print("    to the hand-written JSON — does the model agree? Where")
-print("    does it differ? What would you change in the prompt?")
-print("=" * 70)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# TAKE-HOME ASSIGNMENT
+# ═══════════════════════════════════════════════════════════════════
+#
+# PART A — Load the other two scenarios:
+#   1. Extend this script to also load and validate:
+#      shared/data/service-readiness-degraded.json
+#      shared/data/service-readiness-unknown.json
+#   2. Add the same tests to tests/test_schemas.py
+#      (follow the healthy example that's already there)
+#
+# PART B — LLM integration:
+#   Use src.schemas.generate_readiness_report() to feed
+#   the mock data to the LLM and get back a typed report.
+#   Example:
+#
+#     import json
+#     from src.schemas import generate_readiness_report
+#
+#     with open('../shared/data/service-readiness-healthy.json') as f:
+#         data = json.load(f)
+#
+#     report = generate_readiness_report(
+#         service_name=data['service']['name'],
+#         build_data=data['build'],
+#         deploy_data=data['deployment'],
+#         temperature=0.0,
+#     )
+#
+#     # report is a typed ServiceReadinessReport — no parsing needed!
+#     print(report.model_dump_json(indent=2))
+#
+#   Run this for all 3 scenarios. Compare the LLM's verdict
+#   to the hand-written JSON — does the model agree? Where
+#   does it differ? What would you change in the prompt?
+# ═══════════════════════════════════════════════════════════════════
