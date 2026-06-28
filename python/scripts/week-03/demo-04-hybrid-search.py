@@ -1,9 +1,9 @@
 """
-Demo 4: Vector Retrieval — what semantic search finds
+Demo 4: Vector Retrieval + Hybrid Concept
 
-Runs three queries through the vector retriever and shows
-what chunks come back. Then compares one query with hybrid
-search and explains when hybrid would make a difference.
+Shows vector retrieval for three queries, then compares vector
+vs hybrid on the same query. With 9 docs they return identical
+results — the demo explains WHY and WHEN hybrid would diverge.
 
 Run: python scripts/week-03/demo-04-hybrid-search.py
 """
@@ -15,9 +15,9 @@ from src.rag import index_documents, retrieve, hybrid_search
 index_documents(chunk_size=512, chunk_overlap=64)
 
 queries = [
-    ("error 408", "BM25 finds '408' in lunch budget AND incident log. Vector only finds incidents."),
-    ("PROJ-891", "BM25 finds ticket in lunch doc AND travel advisory. Vector only finds tech docs."),
-    ("payment-api timeout", "BM25 finds travel site AND tech docs. Vector only finds tech docs."),
+    ("error 408", "exact error code — vector finds incident log + error codes section"),
+    ("PROJ-891", "exact ticket ID — vector finds inventory SLA + incident mentioning it"),
+    ("payment-api timeout", "service name + concept — vector finds timeout diff + incident log"),
 ]
 
 print("=" * 70)
@@ -43,7 +43,8 @@ for idx, (question, description) in enumerate(queries, 1):
 # Hybrid comparison on a keyword-heavy query
 # ═══════════════════════════════════════════════════════════════
 print("  ╔══════════════════════════════════════════════════════════════╗")
-print("  ║  BONUS: Vector vs Hybrid on \"error 408\"                     ║")
+print("  ║  CONCEPT: Vector vs Hybrid — same query, both retrievers    ║")
+print("  ║  (At 9 docs they agree. At 100+ docs, BM25 surfaces noise.) ║")
 print("  ╚══════════════════════════════════════════════════════════════╝")
 print()
 
