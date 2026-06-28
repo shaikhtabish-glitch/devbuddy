@@ -16,8 +16,14 @@ pip install -r requirements.txt # chromadb + sentence-transformers should be ins
 Verify you're ready:
 
 ```bash
+# Week 2 baseline (8 pure-Pydantic tests)
 python -m pytest tests/test_schemas.py -v -k "not analyze_pr"
-# Should show 8 tests passing (Week 2 baseline still holds)
+
+# Week 3 RAG tests (10 tests — requires embedding model download on first run)
+python -m pytest tests/test_rag.py -v
+
+# Full suite (21 tests)
+python -m pytest tests/ -v --ignore=tests/test_integration.py
 
 python -c "import chromadb; print('ChromaDB OK')"
 python -c "from sentence_transformers import SentenceTransformer; print('embeddings OK')"
@@ -27,26 +33,33 @@ python -c "from sentence_transformers import SentenceTransformer; print('embeddi
 
 ## What You Have
 
-Open `src/rag.py`. It's currently a stub. By the end of this session, it will:
+Open `src/rag.py`. It already contains a full RAG pipeline:
 
-- Load documents from `shared/data/`
-- Split them into configurable chunks
-- Embed chunks with `sentence-transformers` (all-MiniLM-L6-v2 — local, free, no API cost)
-- Store in ChromaDB (local vector database)
-- Retrieve the top-k chunks for a query
-- Assemble context in the right order (system prompt → chunks → user query)
-- Answer questions grounded strictly in the retrieved context
+- `index_documents(directory, chunk_size, chunk_overlap)` — loads .md/.txt, chunks, embeds, stores in ChromaDB
+- `retrieve(query, k)` — top-k semantic search
+- `hybrid_search(query, k)` — BM25 + vector interleaved merge
+- `grounded_answer(query, k, temperature)` — retrieve → inject into prompt → LLM answer
+- `grounded_answer_with_chunks(query, k, temperature)` — returns answer + chunks for transparency
+
+**Embeddings:** `all-MiniLM-L6-v2` via `langchain-huggingface` — local, free, no API cost. Downloaded once on first use (~80MB).
+
+**Import graph:** `rag → llm → config` ✅
 
 ## Files You'll Touch
-- `src/rag.py` — your implementation (imports `src/llm`)
+- `src/rag.py` — study the implementation, extend it during hands-on
 - `src/llm.py` — already built (`get_llm()` factory)
 - `shared/data/` — document set to index
 
 ## Document Set (pre-loaded in the repo)
-- `shared/data/README.md` — DevBuddy project overview
-- `shared/data/CONTRIBUTING.md` — contribution guide
-- `shared/data/payment-api-spec.md` — fake API spec for the payments service
-- `shared/data/inventory-service-sla.md` — grounding document that prevents hallucination
+- `shared/data/payment-api-spec.md` — fake API spec: endpoints, auth, error codes, SLA
+- `shared/data/inventory-service-sla.md` — grounding document: "No SLA defined"
+- `shared/data/CONTRIBUTING.md` — DevBuddy contribution guide (setup, code style, PR process)
+
+## Demo Scripts
+- `scripts/week-03/demo-01-embed-retrieve-ground.py` — full RAG loop: index → retrieve → answer
+- `scripts/week-03/demo-02-hallucinate-ground.py` — out-of-corpus vs in-corpus (system prompt suppresses hallucination)
+- `scripts/week-03/demo-03-chunk-size.py` — same question across 256, 512, 1024 chunk sizes
+- `scripts/week-03/demo-04-hybrid-search.py` — vector vs BM25+vector side by side
 
 ---
 
@@ -60,35 +73,20 @@ The moderator will run two demos first (embed+retrieve+ground, then hallucinate+
 
 ### Step 1: Index the document set (10 min)
 
-`src/rag.py` is a stub. Build the core pipeline:
+`src/rag.py` is already implemented. Run the index and explore the code:
 
 ```python
-from src.rag import index_documents, retrieve
+from src.rag import index_documents
 
-# Load all .md and .txt files from shared/data/
-# Split into chunks (default: 512 tokens with 64-token overlap)
-# Embed with sentence-transformers (all-MiniLM-L6-v2)
-# Store in ChromaDB collection "devbuddy-docs"
-index_documents("../shared/data/", chunk_size=512, chunk_overlap=64)
-```
-
-**Stuck?** Here's the skeleton:
-
-```python
-import os
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
-
-def index_documents(directory: str, chunk_size: int = 512, chunk_overlap: int = 64):
-    # 1. Walk directory, read .md and .txt files
-    # 2. RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-    # 3. HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    # 4. Chroma.from_documents(docs, embeddings, persist_directory="./chroma_db")
-    pass
+# Index all .md and .txt files from shared/data/
+# Defaults: chunk_size=512, chunk_overlap=64
+count = index_documents()
+print(f"Indexed {count} chunks")
 ```
 
 **Check:** After running, `ls chroma_db/` should show the ChromaDB index files.
+
+**Want to understand the implementation?** Open `src/rag.py`. Read `index_documents()` — it uses `DirectoryLoader` → `RecursiveCharacterTextSplitter` → `HuggingFaceEmbeddings` → `Chroma.from_documents()`. This is the standard LangChain RAG pattern.
 
 ---
 
@@ -113,26 +111,33 @@ The model should answer from the retrieved chunks — not from its training data
 
 ---
 
-### Step 3: Trigger a hallucination (5 min)
+### Step 3: Out-of-corpus vs In-corpus (5 min)
 
-Ask a question that's **not** in any document:
-
-```python
-answer = grounded_answer("What's the SLA for the inventory service?")
-print(answer)
-# The model will invent an SLA. "99.9% uptime." Confident. Wrong.
-```
-
-Now add the grounding document. Open `shared/data/inventory-service-sla.md`. It says "No SLA defined." Re-index, re-ask:
+Our system prompt tells the model: "If the context does not contain the answer, say so." Test it:
 
 ```python
-index_documents("../shared/data/")  # re-index with the new doc
-answer = grounded_answer("What's the SLA for the inventory service?")
-print(answer)
-# Now: "No SLA is defined for the inventory service."
+from src.rag import grounded_answer_with_chunks
+
+# Out-of-corpus — model should decline, not hallucinate
+answer, chunks = grounded_answer_with_chunks(
+    "What's the revenue forecast for Q4 2028?", k=3
+)
+print(f"Answer: {answer}")
+# → "I don't have information about that in my knowledge base."
+# ✅ System prompt worked. No hallucination.
+
+# In-corpus — model retrieves and answers
+answer, chunks = grounded_answer_with_chunks(
+    "What's the SLA for the inventory service?", k=3
+)
+print(f"Answer: {answer}")
+for i, c in enumerate(chunks):
+    print(f"  Chunk {i+1}: {c[:100]}...")
+# → "No SLA is defined for the inventory service."
+# ✅ Retrieved from inventory-service-sla.md
 ```
 
-**The hallucination is suppressed.** But this only works if the grounding document exists and is retrieved. If retrieval misses it, the model hallucinates again.
+The system prompt IS the guardrail. Without it, the out-of-corpus question would produce a confident hallucination. With it, the model declines. This is context engineering: you control what the model does when retrieval fails.
 
 ---
 
@@ -176,13 +181,13 @@ Find one case where hybrid gives a better answer than pure vector. The keyword "
 ---
 
 ## Acceptance Criteria
-- [ ] `index_documents()` builds a ChromaDB collection from `shared/data/`
+- [ ] `index_documents()` builds a ChromaDB collection from `shared/data/` (12 chunks at size=512)
 - [ ] `retrieve()` returns relevant chunks for an in-corpus question
-- [ ] `grounded_answer()` produces an answer from the retrieved context
-- [ ] An out-of-corpus question triggers a hallucination
-- [ ] Adding a grounding document suppresses the hallucination
-- [ ] Chunk size 256, 512, and 1024 produce different retrieval quality
-- [ ] Hybrid search beats pure vector on at least one query
+- [ ] `grounded_answer()` produces an answer that references the retrieved documents
+- [ ] An out-of-corpus question returns "I don't have information about that" (system prompt prevents hallucination)
+- [ ] `grounded_answer_with_chunks()` returns both the answer and the retrieved chunks
+- [ ] Chunk size 256 produces more chunks than chunk size 1024
+- [ ] `hybrid_search()` returns different results than `retrieve()` on keyword-heavy queries
 
 ---
 
