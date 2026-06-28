@@ -50,6 +50,6 @@ The demo scripts in `scripts/week-02/` show why this matters — free-text crash
 
 ## One Thing to Try
 
-Before the session, run: `python scripts/week-02/validate-readiness.py`
+Before the session, run: `python scripts/week-02/explore-readiness-report.py`
 
 It loads 3 mock JSON scenarios and validates each against `ServiceReadinessReport`. You'll see nested models, `Optional` fields, and cross-field validators in action — before you write a single line of code. Ask yourself: *"How would I build this schema? What would break if I changed field types?"*

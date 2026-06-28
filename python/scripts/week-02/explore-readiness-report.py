@@ -4,7 +4,7 @@ Week 2 — Validate a ServiceReadinessReport from mock data.
 Loads one JSON scenario and validates it against the schema.
 This is your starting point. Your self-learning assignment is below.
 
-Run: python scripts/week-02/validate-readiness.py
+Run: python scripts/week-02/explore-readiness-report.py
 """
 import os
 import sys

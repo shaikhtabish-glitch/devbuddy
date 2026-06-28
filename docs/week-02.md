@@ -51,7 +51,7 @@ Open `src/schemas.py`. It already contains **two schema families**:
 - `scripts/week-02/demo-02-prompt-json.py` — prompt JSON breaks at high temperature
 - `scripts/week-02/demo-02-raw-vs-pydantic.py` — **the centerpiece**: same input, same temp, raw vs Pydantic
 - `scripts/week-02/demo-03-inference-parameters.py` — temp, max_tokens, and cost drill
-- `scripts/week-02/validate-readiness.py` — load mock JSON, validate against `ServiceReadinessReport`
+- `scripts/week-02/explore-readiness-report.py` — validate mock JSON + LLM generation lab
 
 ---
 
@@ -77,7 +77,7 @@ Open `src/schemas.py`. It already contains **two schema families**:
 
 ### Part A: Validate all three scenarios
 
-1. Run the starting script: `python scripts/week-02/validate-readiness.py`
+1. Run the starting script: `python scripts/week-02/explore-readiness-report.py`
    - It validates `service-readiness-healthy.json`. Read the output. Read the TAKE-HOME ASSIGNMENT section at the bottom.
 2. Extend it to also load and validate `service-readiness-degraded.json` and `service-readiness-unknown.json`
 3. Add tests for both to `tests/test_schemas.py` (follow the healthy example already there)
@@ -87,7 +87,7 @@ Open `src/schemas.py`. It already contains **two schema families**:
 
 `src/schemas.py` has a new function: `generate_readiness_report(service_name, build_data, deploy_data)`. It takes the mock JSON data, feeds it to the LLM, and returns a typed `ServiceReadinessReport`.
 
-1. Write a short script (or extend `validate-readiness.py`) that:
+1. Write a short script (or extend `explore-readiness-report.py`) that:
    - Loads one of the mock JSON files
    - Passes the build + deploy data to `generate_readiness_report()`
    - Prints the result with `model_dump_json(indent=2)`
