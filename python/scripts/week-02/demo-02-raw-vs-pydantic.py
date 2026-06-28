@@ -7,10 +7,10 @@ WHAT THIS DEMO SHOWS:
 
   Pydantic structured output is a contract. The model is constrained at the
   token level. It CANNOT return output that violates the schema. Even at
-  temperature=1.5, the output is always valid and correctly typed.
+  temperature=0.0, the output is always valid and correctly typed.
 
 THE SETUP:
-  Same input (a PR diff). Same temperature (1.5 — deliberately chaotic).
+  Same input (a PR diff). Same temperature (0.0 — deterministic).
   Same extraction task. Two approaches.
 
 Run: python scripts/week-02/demo-02-raw-vs-pydantic.py
@@ -105,10 +105,11 @@ def run_demo():
     print("  " + "-" * 55)
     print()
 
-    test_temperature = 1.5
-    print(f"  ⚠️  TEMPERATURE: {test_temperature} — deliberately high to simulate chaos")
-    print("     At this temperature, the model becomes 'creative'.")
-    print("     Raw prompts break. Pydantic contracts hold.")
+    test_temperature = 0
+    print(f"  TEMPERATURE: {test_temperature} — fully deterministic")
+    print("     Even at temp=0, raw prompting fails. The model still wraps")
+    print("     valid JSON in markdown backticks. Temperature is not the issue.")
+    print("     The APPROACH is the issue — request vs contract.")
     print()
 
     # ═══════════════════════════════════════════════════════════
@@ -131,6 +132,8 @@ def run_demo():
         "}\n\n"
         "DIFF:\n"
     )
+    print(f"Raw Prompt: {raw_prompt}")
+    print("=" * 75)
 
     llm_raw = get_llm(temperature=test_temperature)
 
@@ -148,7 +151,7 @@ def run_demo():
     print("  Attempting to parse as JSON...")
     try:
         data = json.loads(raw_text)
-        print("  ✅ PARSE SUCCEEDED (lucky — at temp=1.5 this often fails)")
+        print("  ✅ PARSE SUCCEEDED (even with markdown wrapper? check raw output)")
         print(f"     Keys returned: {list(data.keys())}")
         change = data.get("change", {})
         details = data.get("details", {})
@@ -233,13 +236,12 @@ def run_demo():
     print("  THE VERDICT")
     print("=" * 75)
     print()
-    print("  Same input. Same temperature (1.5). Same extraction task.")
+    print("  Same input. Same temperature (0.0). Same extraction task.")
     print()
     print("  Approach A (Raw Prompting):")
     print("    • A polite request to 'return JSON'")
-    print("    • Model MAY comply, MAY add markdown, MAY add text")
-    print("    • You must clean, parse, and validate the output yourself")
-    print("    • One malformed response = broken pipeline")
+    print("    • Model adds markdown backticks — even at temperature=0")
+    print("    • json.loads() crashes. Pipeline breaks. Temperature didn't matter.")
     print()
     print("  Approach B (Pydantic):")
     print("    • A binding contract — schema enforced at the token level")
