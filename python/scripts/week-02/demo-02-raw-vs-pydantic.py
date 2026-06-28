@@ -162,11 +162,29 @@ def run_demo():
         if isinstance(impact, str) and "%" in impact:
             print(f"     ⚠️  VALUE IS A STRING: '{impact}' — you must clean this manually")
             print(f"        Pydantic's field_validator would have handled this automatically.")
-    except json.JSONDecodeError:
-        print("  ❌ JSON PARSE FAILED")
-        print("     The model likely wrapped the JSON in markdown backticks,")
-        print("     added conversational text ('Here is the analysis...'),")
-        print("     or invented field names not in the schema.")
+        
+        # Print the full parsed JSON for comparison
+        print()
+        print(f"  Full raw JSON result:")
+        print("  " + "-" * 55)
+        print(f"  {json.dumps(data, indent=2)}")
+        print("  " + "-" * 55)
+    except json.JSONDecodeError as e:
+        print(f"  ❌ JSON PARSE FAILED")
+        print(f"     Error: {e.msg} at line {e.lineno}, column {e.colno}")
+        print()
+        # Show the raw output so the audience can see what went wrong
+        print(f"  Raw output that failed to parse:")
+        print("  " + "-" * 55)
+        for line in raw_text[:500].split("\n"):
+            # Highlight markdown backticks
+            if line.strip().startswith("```"):
+                print(f"  | ⚠️  {line}")
+            else:
+                print(f"  | {line}")
+        if len(raw_text) > 500:
+            print(f"  | ... ({len(raw_text) - 500} more chars)")
+        print("  " + "-" * 55)
         print()
         print("     THIS IS THE PROBLEM: a single malformed response")
         print("     breaks your entire pipeline. In production, this means")
@@ -203,6 +221,14 @@ def run_demo():
     print(f"    technical.files_changed:  {pydantic_result.technical.files_changed}")
     print(f"    technical.db_changed:     {pydantic_result.technical.db_changed}")
     print(f"    technical.rollback:       {pydantic_result.technical.rollback[:40]}...")
+    print()
+
+    # Print the full Pydantic result as JSON for comparison
+    print("  Full Pydantic result (model_dump):")
+    print("  " + "-" * 55)
+    import json as _json
+    print(f"  {_json.dumps(pydantic_result.model_dump(), indent=2)}")
+    print("  " + "-" * 55)
     print()
 
     # ═══════════════════════════════════════════════════════════
