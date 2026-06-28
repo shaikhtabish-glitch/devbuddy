@@ -7,14 +7,18 @@
 ## Setup
 
 ```bash
+# 1. Pull latest code
+cd devbuddy && git pull upstream main
+
+# 2. Start Qdrant vector database (required for Week 3+)
+docker compose up -d
+curl http://localhost:6333/healthz  # → healthz check passed
+# Dashboard: http://localhost:6333/dashboard
+
+# 3. Install dependencies
 cd python
 source .venv/bin/activate
-git pull upstream main          # get latest code + doc set
-pip install -r requirements.txt # qdrant-client + sentence-transformers
-
-# Start Qdrant vector database (required for Week 3+)
-cd .. && docker compose up -d && cd python
-curl http://localhost:6333/healthz   # verify it's running
+pip install -r requirements.txt
 ```
 
 Verify you're ready:
@@ -175,36 +179,49 @@ for size in [256, 512, 1024]:
 
 ### Step 5: Hybrid search (5 min)
 
-Pure vector search finds semantic similarity. But keyword matches (BM25) catch exact names, IDs, and error codes:
+Pure vector = semantic similarity. Hybrid = vector + BM25 keyword, fused via RRF. Error codes and ticket IDs have no semantic meaning — keyword matching catches what vector misses:
 
 ```python
 from src.rag import index_documents, retrieve, hybrid_search
 
-index_documents()  # ensure the index exists
+index_documents()
 
-# Compare pure vector vs hybrid
-vec_chunks = retrieve("payment-api timeout", k=3)
-hyb_chunks = hybrid_search("payment-api timeout", k=3)
+# Compare on a keyword-heavy query
+vec = retrieve("error 408", k=5)
+hyb = hybrid_search("error 408", k=5)
 
-print("Vector only:")
-for c in vec_chunks: print(f"  {c[:100]}...")
+print("Vector top-5:")
+for i, c in enumerate(vec):
+    print(f"  [{i+1}] {c.strip().split(chr(10))[0]}")
 
-print("\nHybrid (vector + BM25):")
-for c in hyb_chunks: print(f"  {c[:100]}...")
+print("\nHybrid top-5:")
+for i, c in enumerate(hyb):
+    print(f"  [{i+1}] {c.strip().split(chr(10))[0]}")
 ```
 
-Find one case where hybrid gives a better answer than pure vector. The keyword "payment-api" should boost exact matches that vector-only might miss.
+With 8 documents, the top-5 may be identical. With 50+ docs, BM25 surfaces keyword matches that vector ignores. The demo script (`scripts/week-03/demo-04-hybrid-search.py`) uses mock data to make the difference visually clear.
 
 ---
 
 ## Acceptance Criteria
-- [ ] `index_documents()` builds a ChromaDB collection from `shared/data/` (12 chunks at size=512)
+- [ ] `index_documents()` builds a Qdrant collection from `shared/data/` (19 chunks at size=512)
 - [ ] `retrieve()` returns relevant chunks for an in-corpus question
 - [ ] `grounded_answer()` produces an answer that references the retrieved documents
 - [ ] An out-of-corpus question returns "I don't have information about that" (system prompt prevents hallucination)
 - [ ] `grounded_answer_with_chunks()` returns both the answer and the retrieved chunks
 - [ ] Chunk size 256 produces more chunks than chunk size 1024
 - [ ] `hybrid_search()` returns different results than `retrieve()` on keyword-heavy queries
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `RuntimeError: No index found` | Run `index_documents()` first |
+| `ConnectionError` on Qdrant | `docker compose up -d` from repo root, then `curl localhost:6333/healthz` |
+| Embedding model slow first run | ~80MB download. Let it finish. Subsequent runs are instant. |
+| `pip install` fails | Make sure you're in `python/` with `.venv` activated |
 
 ---
 
