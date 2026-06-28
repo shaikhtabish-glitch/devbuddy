@@ -97,9 +97,9 @@ elif h408 > v408:
     print(f"  BM25 is boosting exact keyword matches.")
 else:
     print(f"  ══ Top-5 identical ({v408} '408' chunks each).")
-    print(f"  With {len(vec)} docs, both retrievers agree at this depth.")
-    print(f"  At 50+ docs, BM25 would surface keyword matches that")
-    print(f"  vector ignores — error codes have no semantic neighbors.")
+    print(f"  With 7 docs, both retrievers agree at this depth.")
+    print(f"  At 50+ docs, BM25 would surface more keyword matches")
+    print(f"  that vector misses — error codes have no semantic neighbors.")
 
 print()
 print("=" * 70)
