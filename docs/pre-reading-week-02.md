@@ -37,11 +37,12 @@ The model is constrained by a schema. It returns a typed object — not prose. Y
 
 ## What You'll Build Today
 
-Open `src/schemas.py`. It's currently a stub. By the end of the session, it will:
+Open `src/schemas.py`. It already contains two schema families:
 
-1. Define a `BuildCheck` Pydantic model
-2. Call the LLM with `with_structured_output()`
-3. Return a typed object your code can import — not prose
+- **`BuildCheck`** — a flat 4-field model for PR analysis. This is the in-session exercise. You'll reproduce it, break it, vary temperature, and add few-shot examples.
+- **`ServiceReadinessReport`** — a composed schema with 5 nested models, `Optional` fields, and cross-field validators. This is what DevBuddy produces at Week 7. You'll explore it during self-learning with mock data (no API calls needed).
+
+The demo scripts in `scripts/week-02/` show why this matters — free-text crashes a parser, Pydantic saves it. The "request vs contract" distinction is the most important idea in AI-first engineering.
 
 **You'll also:** vary temperature, break the schema on purpose, add a few-shot example, and see what happens. The skill isn't getting it right the first time — it's building systems that survive the breakage.
 
@@ -49,4 +50,6 @@ Open `src/schemas.py`. It's currently a stub. By the end of the session, it will
 
 ## One Thing to Try
 
-Before the session, open `src/schemas.py`. Look at the stub. Think: *"What fields would a PR review need? What should the model return?"*
+Before the session, run: `python scripts/week-02/validate-readiness.py`
+
+It loads 3 mock JSON scenarios and validates each against `ServiceReadinessReport`. You'll see nested models, `Optional` fields, and cross-field validators in action — before you write a single line of code. Ask yourself: *"How would I build this schema? What would break if I changed field types?"*
