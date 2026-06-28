@@ -17,8 +17,13 @@ pr = "PR: Fix login redirect loop in auth-service. Changed auth.py line 42-58."
 
 for temp in [0.0, 0.5, 1.0]:
     llm = get_llm(temperature=temp)
-    response = llm.invoke([HumanMessage(content=f"In one sentence, what does this PR do? {pr}")])
-    print(f"  temp={temp}: {response.content.strip()}")
+    response = llm.invoke([HumanMessage(content=(
+        f"Suggest 3 alternative PR titles for this change. Be creative.\n{pr}"
+    ))])
+    print(f"  temp={temp}:")
+    for line in response.content.strip().split("\n")[:4]:
+        if line.strip():
+            print(f"    {line.strip()}")
     print()
 
 print("=" * 60)
