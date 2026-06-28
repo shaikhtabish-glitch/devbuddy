@@ -30,10 +30,20 @@ for i in range(3):
     response = llm.invoke([HumanMessage(content=prompt)])
     try:
         data = json.loads(response.content)
-        print(f"  Run {i+1}: ✅ {data}")
+        print(f"  Run {i+1}: ✅ Valid JSON parsed")
         prompt_pass += 1
-    except json.JSONDecodeError:
-        print(f"  Run {i+1}: ❌ Parse failed → {response.content[:60]}...")
+    except json.JSONDecodeError as e:
+        # Show what went wrong and why
+        raw = response.content
+        print(f"  Run {i+1}: ❌ JSON parse failed")
+        print(f"         Error: {e.msg} (line {e.lineno}, col {e.colno})")
+        if raw.startswith("```"):
+            print(f"         Cause: Model wrapped output in markdown code block")
+        elif raw.startswith(("Sure", "Here", "The", "Based")):
+            print(f"         Cause: Model added explanatory text before the JSON")
+        else:
+            print(f"         Raw output: {raw[:100]}...")
+        print()
 print(f"  Result: {prompt_pass}/3 passed")
 print()
 

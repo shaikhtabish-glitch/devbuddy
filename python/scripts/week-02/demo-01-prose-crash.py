@@ -23,7 +23,7 @@ response = llm.invoke([HumanMessage(content=(
 ))])
 
 print("RAW OUTPUT:")
-print(f"  {response.content[:120]}")
+print(f"  {response.content[:300]}")
 print()
 
 # Try to parse as JSON — will crash
