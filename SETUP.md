@@ -6,6 +6,7 @@
 
 - Python 3.11 or later (`python --version`)
 - Node.js 20 or later (`node --version`) — for Promptfoo evals (Week 7)
+- Docker Desktop (or equivalent) — for Qdrant vector database (Week 3+)
 - Git
 - An OpenRouter API key (check `#devbuddy-series` or contact the ops team)
 
@@ -47,7 +48,27 @@ pip install -r requirements.txt
 
 ---
 
-## Step 4: Configure Your API Key
+## Step 4: Start Qdrant (Week 3+)
+
+Qdrant is the vector database for RAG. Start it with Docker:
+
+```bash
+cd devbuddy   # repo root (where docker-compose.yml lives)
+docker compose up -d
+```
+
+Verify it's running:
+
+```bash
+curl http://localhost:6333/healthz
+# → {"title":"healthz","version":"..."}
+```
+
+Dashboard at http://localhost:6333/dashboard
+
+---
+
+## Step 5: Configure Your API Key
 
 ```bash
 cp .env.example .env
@@ -66,7 +87,7 @@ Change `DEVBUDDY_MODEL` to any OpenRouter model string (`anthropic/claude-sonnet
 
 ---
 
-## Step 5: Run the Verification Script
+## Step 6: Run the Verification Script
 
 ```bash
 python src/verification.py
@@ -114,7 +135,7 @@ Expected output:
 
 ---
 
-## Step 6: Run the Integration Test
+## Step 7: Run the Integration Test
 
 ```bash
 python tests/test_integration.py
@@ -140,7 +161,7 @@ This validates everything end-to-end:
 
 ---
 
-## Step 7: Post to the Channel
+## Step 8: Post to the Channel
 
 Copy your terminal output and post it to `#devbuddy-series` with one sentence:
 
@@ -148,7 +169,7 @@ Copy your terminal output and post it to `#devbuddy-series` with one sentence:
 
 ---
 
-## Step 8: Verify Promptfoo (Optional)
+## Step 9: Verify Promptfoo (Optional)
 
 Promptfoo runs evals against your LLM outputs. This smoke test demonstrates:
 - **Multi-model comparison** — same prompt, GPT-4o-mini vs Gemini Flash

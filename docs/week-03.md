@@ -10,7 +10,11 @@
 cd python
 source .venv/bin/activate
 git pull upstream main          # get latest code + doc set
-pip install -r requirements.txt # chromadb + sentence-transformers should be installed
+pip install -r requirements.txt # qdrant-client + sentence-transformers
+
+# Start Qdrant vector database (required for Week 3+)
+cd .. && docker compose up -d && cd python
+curl http://localhost:6333/healthz   # verify it's running
 ```
 
 Verify you're ready:
@@ -19,14 +23,11 @@ Verify you're ready:
 # Week 2 baseline (8 pure-Pydantic tests)
 python -m pytest tests/test_schemas.py -v -k "not analyze_pr"
 
-# Week 3 RAG tests (10 tests — requires embedding model download on first run)
+# Week 3 RAG tests (10 tests — requires embedding model download + Qdrant running)
 python -m pytest tests/test_rag.py -v
 
 # Full suite (21 tests)
 python -m pytest tests/ -v --ignore=tests/test_integration.py
-
-python -c "import chromadb; print('ChromaDB OK')"
-python -c "from sentence_transformers import SentenceTransformer; print('embeddings OK')"
 ```
 
 ---
@@ -40,6 +41,8 @@ Open `src/rag.py`. It already contains a full RAG pipeline:
 - `hybrid_search(query, k)` — BM25 + vector interleaved merge
 - `grounded_answer(query, k, temperature)` — retrieve → inject into prompt → LLM answer
 - `grounded_answer_with_chunks(query, k, temperature)` — returns answer + chunks for transparency
+
+**Vector store:** Qdrant — runs in Docker (`docker compose up -d`). Production-grade, cross-language (Python/Node.js/Java). Dashboard at http://localhost:6333/dashboard.
 
 **Embeddings:** `all-MiniLM-L6-v2` via `langchain-huggingface` — local, free, no API cost. Downloaded once on first use (~80MB).
 
@@ -84,9 +87,9 @@ count = index_documents()
 print(f"Indexed {count} chunks")
 ```
 
-**Check:** After running, `ls chroma_db/` should show the ChromaDB index files.
+**Check:** After running, visit http://localhost:6333/dashboard — you should see the `devbuddy-docs` collection with chunks.
 
-**Want to understand the implementation?** Open `src/rag.py`. Read `index_documents()` — it uses `DirectoryLoader` → `RecursiveCharacterTextSplitter` → `HuggingFaceEmbeddings` → `Chroma.from_documents()`. This is the standard LangChain RAG pattern. Note the separators: `\n# `, `\n## `, `\n### ` — single `#` is critical for splitting top-level document titles.
+**Want to understand the implementation?** Open `src/rag.py`. Read `index_documents()` — it uses `DirectoryLoader` → `RecursiveCharacterTextSplitter` → `HuggingFaceEmbeddings` → `QdrantVectorStore`. This is the standard LangChain RAG pattern with a production vector DB. Note the separators: `\n# `, `\n## `, `\n### ` — single `#` is critical for splitting top-level document titles.
 
 ---
 

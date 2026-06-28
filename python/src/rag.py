@@ -2,7 +2,7 @@
 Week 3 — RAG Pipeline: Embed, Chunk, Store, Retrieve, Ground
 
 Uses sentence-transformers (all-MiniLM-L6-v2) for embeddings — local, free, no API cost.
-ChromaDB for vector storage — embedded, no server needed.
+Qdrant for vector storage — runs in Docker, production-grade, cross-language.
 Hybrid search with BM25 + vector for exact keyword matching.
 
 Imports: from src.llm import get_llm
@@ -11,19 +11,22 @@ import os
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_qdrant import QdrantVectorStore
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.messages import HumanMessage, SystemMessage
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams
 
 from src.llm import get_llm
 
 # ─── Config ───────────────────────────────────────────────────
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-CHROMA_DIR = os.path.join(os.path.dirname(__file__), "..", "chroma_db")
+QDRANT_URL = os.environ.get("QDRANT_URL", "http://localhost:6333")
+QDRANT_COLLECTION = "devbuddy-docs"
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "shared", "data")
 
 _embeddings: HuggingFaceEmbeddings | None = None
-_vectorstore: Chroma | None = None
+_vectorstore: QdrantVectorStore | None = None
 _documents: list | None = None
 
 
@@ -42,7 +45,7 @@ def index_documents(
 ) -> int:
     """
     Load .md and .txt files from a directory, chunk them, embed them,
-    and store in ChromaDB.
+    and store in Qdrant.
 
     Args:
         directory: Path to document directory. Defaults to shared/data/.
@@ -79,22 +82,33 @@ def index_documents(
     )
     chunks = splitter.split_documents(docs)
 
-    _embeddings = _get_embeddings()
+    emb = _get_embeddings()
 
-    # Clear existing collection so re-indexing doesn't return stale vectors
-    import chromadb
-    client = chromadb.PersistentClient(path=CHROMA_DIR)
+    # Connect to Qdrant, recreate collection with fresh vectors
+    client = QdrantClient(url=QDRANT_URL)
     try:
-        client.delete_collection("devbuddy-docs")
+        client.delete_collection(QDRANT_COLLECTION)
     except Exception:
-        pass  # collection doesn't exist yet — fine
+        pass
 
-    _vectorstore = Chroma.from_documents(
-        documents=chunks,
-        embedding=_embeddings,
-        persist_directory=CHROMA_DIR,
-        collection_name="devbuddy-docs",
+    # Get embedding dimension from the model
+    test_vec = emb.embed_query("test")
+    vector_size = len(test_vec)
+
+    client.create_collection(
+        collection_name=QDRANT_COLLECTION,
+        vectors_config=VectorParams(
+            size=vector_size,
+            distance=Distance.COSINE,
+        ),
     )
+
+    _vectorstore = QdrantVectorStore(
+        client=client,
+        collection_name=QDRANT_COLLECTION,
+        embedding=emb,
+    )
+    _vectorstore.add_documents(chunks)
     _documents = chunks
     return len(chunks)
 
@@ -118,18 +132,17 @@ def retrieve(query: str, k: int = 3) -> list[str]:
 
 def hybrid_search(query: str, k: int = 3) -> list[str]:
     """
-    Retrieve using BM25 (keyword) + vector (semantic) and merge results.
+    Retrieve using BM25 (keyword) + vector (semantic) and merge via RRF.
 
     BM25 catches exact names, IDs, error codes. Vector catches meaning.
-    The merge interleaves: the top vector result gets priority, but BM25
-    results that the vector search missed are included too.
+    RRF fusion combines both rankings into one result set.
 
     Args:
         query: The search query.
         k: Number of chunks to return after merging.
 
     Returns:
-        List of chunk content strings, merged from both retrievers.
+        List of chunk content strings, merged via reciprocal rank fusion.
     """
     if _vectorstore is None or _documents is None:
         raise RuntimeError("No index found. Run index_documents() first.")
@@ -143,19 +156,18 @@ def hybrid_search(query: str, k: int = 3) -> list[str]:
     bm25_results = bm25.invoke(query)
     bm25_chunks = [doc.page_content for doc in bm25_results]
 
-    # Interleave: start with vector results, add BM25 results not already present
-    seen = set()
-    merged = []
-    for chunk in vec_chunks:
-        if chunk not in seen:
-            merged.append(chunk)
-            seen.add(chunk)
-    for chunk in bm25_chunks:
-        if chunk not in seen:
-            merged.append(chunk)
-            seen.add(chunk)
+    # Reciprocal Rank Fusion
+    rrf_scores: dict[str, float] = {}
+    K = 60
 
-    return merged[:k]
+    for rank, chunk in enumerate(vec_chunks, 1):
+        rrf_scores[chunk] = rrf_scores.get(chunk, 0.0) + 1.0 / (K + rank)
+
+    for rank, chunk in enumerate(bm25_chunks, 1):
+        rrf_scores[chunk] = rrf_scores.get(chunk, 0.0) + 1.0 / (K + rank)
+
+    sorted_chunks = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+    return [chunk for chunk, _ in sorted_chunks[:k]]
 
 
 def grounded_answer(query: str, k: int = 3, temperature: float = 0.0) -> str:
