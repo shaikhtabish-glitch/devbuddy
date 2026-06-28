@@ -80,6 +80,15 @@ def index_documents(
     chunks = splitter.split_documents(docs)
 
     _embeddings = _get_embeddings()
+
+    # Clear existing collection so re-indexing doesn't return stale vectors
+    import chromadb
+    client = chromadb.PersistentClient(path=CHROMA_DIR)
+    try:
+        client.delete_collection("devbuddy-docs")
+    except Exception:
+        pass  # collection doesn't exist yet — fine
+
     _vectorstore = Chroma.from_documents(
         documents=chunks,
         embedding=_embeddings,
