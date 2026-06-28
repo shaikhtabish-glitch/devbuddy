@@ -1,6 +1,6 @@
-"""Demo 2: Prompt with JSON Instructions + Temperature
-Same PR. Asked for JSON in the prompt. Runs 3 times at temp=0.7.
-Shows: even with explicit JSON instructions, the model sometimes fails.
+"""Demo 2: Prompt JSON + Temperature — Schema Degrades
+Same PR. Asked for JSON in the prompt. Vary temperature.
+At temp=0: clean JSON. At temp=1.0: model drifts, adds text, breaks format.
 Run: python scripts/week-02/demo-02-prompt-json.py
 """
 import os, sys
@@ -11,38 +11,31 @@ from src.llm import get_llm
 from langchain_core.messages import HumanMessage
 
 print("=" * 60)
-print("  Demo 2: Prompt JSON — 'Return JSON' Is a Request")
+print("  Demo 2: Prompt JSON — Temperature Breaks the Format")
 print("=" * 60)
 print()
 
-llm = get_llm(temperature=0.7)
 pr = "Fix login redirect loop in auth-service. Changed auth.py line 42-58."
-
 prompt = (
-    "Analyze this PR. Return ONLY valid JSON with these fields:\n"
+    'Return ONLY valid JSON. No other text.\n'
     '{"severity": "low/medium/high/critical", "summary": "one sentence"}\n\n'
-    f"PR: {pr}"
+    f'PR: {pr}'
 )
 
-passed = 0
-for i in range(3):
+for temp in [0.0, 0.5, 1.0]:
+    llm = get_llm(temperature=temp)
     response = llm.invoke([HumanMessage(content=prompt)])
-    raw = response.content
+    raw = response.content.strip()
     try:
         data = json.loads(raw)
-        print(f"  Run {i+1}: ✅ Valid JSON — severity={data.get('severity', '?')}")
-        passed += 1
-    except json.JSONDecodeError as e:
-        print(f"  Run {i+1}: ❌ Parse failed — {e.msg} (line {e.lineno})")
-        if raw.startswith("```"):
-            print(f"         Model wrapped output in markdown block")
-        elif raw[:1] not in ("{", "["):
-            print(f"         Model added text before the JSON: {raw[:80]}...")
-        print()
+        print(f"  temp={temp}: ✅ Valid JSON  → severity={data.get('severity','?')}")
+    except json.JSONDecodeError:
+        preview = raw[:80].replace("\n", " ")
+        print(f"  temp={temp}: ❌ Parse failed → {preview}...")
+    print()
 
-print(f"  Result: {passed}/3 runs produced valid JSON")
-print()
 print("=" * 60)
-print("  'Return JSON' is a request, not a guarantee.")
-print("  This is hope-based architecture.")
+print("  temp=0.0  → model follows instructions strictly")
+print("  temp=1.0  → model gets creative, adds text, breaks JSON")
+print("  'Return JSON' is a hope, not a contract.")
 print("=" * 60)
