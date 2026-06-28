@@ -48,7 +48,6 @@ Open `src/schemas.py`. It already contains **two schema families**:
 - `shared/data/service-readiness-unknown.json` — mock unknown service
 
 ## Demo Scripts
-- `scripts/week-02/demo-02-prompt-json.py` — prompt JSON breaks at high temperature
 - `scripts/week-02/demo-02-raw-vs-pydantic.py` — **the centerpiece**: same input, same temp, raw vs Pydantic
 - `scripts/week-02/demo-03-inference-parameters.py` — temp, max_tokens, and cost drill
 - `scripts/week-02/explore-readiness-report.py` — validate mock JSON + LLM generation lab
