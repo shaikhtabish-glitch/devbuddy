@@ -21,8 +21,9 @@ Previously expired tokens caused infinite redirect for 15% of users.
 Now returns 401 with clear error. No DB changes. Rollback: revert commit.
 Files: src/auth.py, tests/test_auth.py"""
 
-schema = """Extract data from the diff into this EXACT JSON schema.
-Return ONLY valid JSON. No markdown. No explanation. No other text.
+# LOOSENED: No "ONLY JSON" or "No markdown" constraints.
+# This lets high temperature naturally introduce conversational filler or markdown.
+schema_prompt = """Analyze the following diff and extract the data into a JSON object matching this structure:
 
 {
   "change": {
@@ -40,25 +41,31 @@ Return ONLY valid JSON. No markdown. No explanation. No other text.
     "db_changed": true | false,
     "rollback": "how to roll back, from the diff"
   }
-}"""
+}
+
+DIFF:
+"""
 
 for temp in [0.0, 0.5, 1.0]:
     llm = get_llm(temperature=temp)
-    response = llm.invoke([HumanMessage(content=f"{schema}\n\nDIFF:\n{diff}")])
+    response = llm.invoke([HumanMessage(content=f"{schema_prompt}\n{diff}")])
     raw = response.content.strip()
+
     try:
         data = json.loads(raw)
         sev = data["change"]["severity"]
         ticket = data["change"]["ticket"]
         files = data["technical"]["files_changed"]
         print(f"  temp={temp}: ✅ extracted → severity={sev}, ticket={ticket}, files={files}")
-    except (json.JSONDecodeError, KeyError, TypeError) as e:
+    except json.JSONDecodeError:
         preview = raw[:80].replace("\n", " ")
-        print(f"  temp={temp}: ❌ {type(e).__name__}: {preview}...")
+        print(f"  temp={temp}: ❌ Parse failed → {preview}...")
+    except (KeyError, TypeError) as e:
+        print(f"  temp={temp}: ⚠️ Valid JSON but missing field: {e}")
     print()
 
 print("=" * 60)
-print("  temp=0.0  → model extracts cleanly into schema")
-print("  temp=1.0  → model adds markdown, skips fields, invents keys")
-print("  'Return JSON in this schema' is a request. Pydantic is a contract.")
+print("  temp=0.0  → clean extraction into schema")
+print("  temp=1.0  → adds markdown, skips fields, invents keys")
+print("  'Extract into this schema' is a request. Pydantic is a contract.")
 print("=" * 60)
