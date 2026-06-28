@@ -1,12 +1,218 @@
-# Week 3 — RAG pipeline: embed, chunk, store, retrieve, ground
-#
-# This file will contain:
-# - Document loader (read files from shared/data/)
-# - Text chunker (configurable chunk size)
-# - Vector store (ChromaDB — local, zero API cost)
-# - Retriever (semantic search)
-# - Grounded answer function (retrieve → inject → answer)
-#
-# Imports: from src.llm import get_llm
-#
-# By the end of Week 3, this file will answer questions grounded in your docs.
+"""
+Week 3 — RAG Pipeline: Embed, Chunk, Store, Retrieve, Ground
+
+Uses sentence-transformers (all-MiniLM-L6-v2) for embeddings — local, free, no API cost.
+ChromaDB for vector storage — embedded, no server needed.
+Hybrid search with BM25 + vector for exact keyword matching.
+
+Imports: from src.llm import get_llm
+"""
+import os
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import DirectoryLoader, TextLoader
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain_community.retrievers import BM25Retriever
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from src.llm import get_llm
+
+# ─── Config ───────────────────────────────────────────────────
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+CHROMA_DIR = os.path.join(os.path.dirname(__file__), "..", "chroma_db")
+DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "shared", "data")
+
+_embeddings: HuggingFaceEmbeddings | None = None
+_vectorstore: Chroma | None = None
+_documents: list | None = None
+
+
+def _get_embeddings() -> HuggingFaceEmbeddings:
+    """Lazy-load the embedding model (downloaded once on first use)."""
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+    return _embeddings
+
+
+def index_documents(
+    directory: str | None = None,
+    chunk_size: int = 512,
+    chunk_overlap: int = 64,
+) -> int:
+    """
+    Load .md and .txt files from a directory, chunk them, embed them,
+    and store in ChromaDB.
+
+    Args:
+        directory: Path to document directory. Defaults to shared/data/.
+        chunk_size: Max tokens per chunk.
+        chunk_overlap: Overlapping tokens between chunks.
+
+    Returns:
+        Number of chunks indexed.
+    """
+    global _vectorstore, _documents
+
+    target = directory or DATA_DIR
+
+    loader = DirectoryLoader(
+        target,
+        glob="**/*.md",
+        loader_cls=TextLoader,
+        show_progress=False,
+    )
+    txt_loader = DirectoryLoader(
+        target,
+        glob="**/*.txt",
+        loader_cls=TextLoader,
+        show_progress=False,
+    )
+    docs = loader.load() + txt_loader.load()
+    if not docs:
+        raise FileNotFoundError(f"No .md or .txt files found in {target}")
+
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        separators=["\n## ", "\n### ", "\n#### ", "\n", " ", ""],
+    )
+    chunks = splitter.split_documents(docs)
+
+    _embeddings = _get_embeddings()
+    _vectorstore = Chroma.from_documents(
+        documents=chunks,
+        embedding=_embeddings,
+        persist_directory=CHROMA_DIR,
+        collection_name="devbuddy-docs",
+    )
+    _documents = chunks
+    return len(chunks)
+
+
+def retrieve(query: str, k: int = 3) -> list[str]:
+    """
+    Retrieve the top-k most relevant chunks for a query.
+
+    Args:
+        query: The search query.
+        k: Number of chunks to return.
+
+    Returns:
+        List of chunk content strings, most relevant first.
+    """
+    if _vectorstore is None:
+        raise RuntimeError("No index found. Run index_documents() first.")
+    results = _vectorstore.similarity_search(query, k=k)
+    return [doc.page_content for doc in results]
+
+
+def hybrid_search(query: str, k: int = 3) -> list[str]:
+    """
+    Retrieve using BM25 (keyword) + vector (semantic) and merge results.
+
+    BM25 catches exact names, IDs, error codes. Vector catches meaning.
+    The merge interleaves: the top vector result gets priority, but BM25
+    results that the vector search missed are included too.
+
+    Args:
+        query: The search query.
+        k: Number of chunks to return after merging.
+
+    Returns:
+        List of chunk content strings, merged from both retrievers.
+    """
+    if _vectorstore is None or _documents is None:
+        raise RuntimeError("No index found. Run index_documents() first.")
+
+    # Vector results
+    vec_results = _vectorstore.similarity_search(query, k=k * 2)
+    vec_chunks = [doc.page_content for doc in vec_results]
+
+    # BM25 results
+    bm25 = BM25Retriever.from_documents(_documents, k=k * 2)
+    bm25_results = bm25.invoke(query)
+    bm25_chunks = [doc.page_content for doc in bm25_results]
+
+    # Interleave: start with vector results, add BM25 results not already present
+    seen = set()
+    merged = []
+    for chunk in vec_chunks:
+        if chunk not in seen:
+            merged.append(chunk)
+            seen.add(chunk)
+    for chunk in bm25_chunks:
+        if chunk not in seen:
+            merged.append(chunk)
+            seen.add(chunk)
+
+    return merged[:k]
+
+
+def grounded_answer(query: str, k: int = 3, temperature: float = 0.0) -> str:
+    """
+    Answer a question grounded in the retrieved context.
+
+    Retrieves top-k chunks, injects them into the prompt, and asks the LLM
+    to answer strictly from the provided context. If the context doesn't
+    contain the answer, the model is instructed to say so.
+
+    Args:
+        query: The user's question.
+        k: Number of chunks to retrieve.
+        temperature: 0.0 for deterministic output.
+
+    Returns:
+        The LLM's answer, grounded in retrieved documents.
+    """
+    chunks = retrieve(query, k=k)
+    context = "\n\n---\n\n".join(chunks)
+
+    llm = get_llm(temperature=temperature)
+    response = llm.invoke([
+        SystemMessage(content=(
+            "You are a knowledge base assistant. Answer the user's question "
+            "using ONLY the provided context below. If the context does not "
+            "contain the answer, say 'I don't have information about that in "
+            "my knowledge base.' Never invent information.\n\n"
+            "CONTEXT:\n"
+            f"{context}"
+        )),
+        HumanMessage(content=query),
+    ])
+
+    return response.content.strip()
+
+
+def grounded_answer_with_chunks(
+    query: str, k: int = 3, temperature: float = 0.0
+) -> tuple[str, list[str]]:
+    """
+    Same as grounded_answer, but also returns the retrieved chunks
+    for transparency — engineers can verify the grounding.
+
+    Args:
+        query: The user's question.
+        k: Number of chunks to retrieve.
+        temperature: 0.0 for deterministic output.
+
+    Returns:
+        Tuple of (answer, list_of_retrieved_chunks).
+    """
+    chunks = retrieve(query, k=k)
+    context = "\n\n---\n\n".join(chunks)
+
+    llm = get_llm(temperature=temperature)
+    response = llm.invoke([
+        SystemMessage(content=(
+            "You are a knowledge base assistant. Answer the user's question "
+            "using ONLY the provided context below. If the context does not "
+            "contain the answer, say 'I don't have information about that in "
+            "my knowledge base.' Never invent information.\n\n"
+            "CONTEXT:\n"
+            f"{context}"
+        )),
+        HumanMessage(content=query),
+    ])
+
+    return response.content.strip(), chunks
