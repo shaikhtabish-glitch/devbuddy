@@ -76,19 +76,7 @@ def healthy_data():
         return json.load(f)
 
 
-@pytest.fixture
-def degraded_data():
-    with open("../shared/data/service-readiness-degraded.json") as f:
-        return json.load(f)
-
-
-@pytest.fixture
-def unknown_data():
-    with open("../shared/data/service-readiness-unknown.json") as f:
-        return json.load(f)
-
-
-# ── Happy path: all three scenarios validate ──────────────────
+# ── Happy path: reference scenario (pre-validated) ───────────
 
 def test_service_readiness_healthy_validates(healthy_data):
     """Healthy auth-service report passes validation."""
@@ -101,26 +89,19 @@ def test_service_readiness_healthy_validates(healthy_data):
     assert len(report.evidence) == 2
 
 
-def test_service_readiness_degraded_validates(degraded_data):
-    """Degraded payment-api report passes validation."""
-    report = ServiceReadinessReport.model_validate(degraded_data)
-    assert report.service.name == "payment-api"
-    assert report.build.status == "degraded"
-    assert report.build.failing_since is not None
-    assert report.verdict.ready is False
-    assert len(report.verdict.blockers) == 3
-    assert len(report.deployment.recent_deploys) == 3
-
-
-def test_service_readiness_unknown_validates(unknown_data):
-    """Unknown inventory-service report passes validation."""
-    report = ServiceReadinessReport.model_validate(unknown_data)
-    assert report.service.name == "inventory-service"
-    assert report.build.status == "unknown"
-    assert report.build.failing_since is None
-    assert report.verdict.ready is False
-    assert report.verdict.confidence == "low"
-    assert report.evidence == []
+# ═══════════════════════════════════════════════════════════════
+# TAKE-HOME ASSIGNMENT:
+#
+# Two more mock JSON files exist in shared/data/:
+#   service-readiness-degraded.json
+#   service-readiness-unknown.json
+#
+# Your job: write tests for both. Follow the healthy example above.
+# Load the JSON, validate it, assert on the fields you expect.
+#
+# Then: test generate_readiness_report() — feed mock data
+# to the LLM and assert the returned ServiceReadinessReport.
+# ═══════════════════════════════════════════════════════════════
 
 
 # ── Validation: cross-field invariants ────────────────────────
