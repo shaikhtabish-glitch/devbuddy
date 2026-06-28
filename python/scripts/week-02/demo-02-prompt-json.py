@@ -53,6 +53,7 @@ for temp in [0.0, 0.5, 1.0]:
 
     try:
         data = json.loads(raw)
+        print(data)
         sev = data["change"]["severity"]
         ticket = data["change"]["ticket"]
         files = data["technical"]["files_changed"]
