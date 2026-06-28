@@ -13,8 +13,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from src.schemas import analyze_pr
 from src.llm import get_llm
 
-PR_TITLE = "Fix login redirect loop in auth-service"
-PR_DIFF  = "Changed session validation in auth.py line 42-58. Expired tokens now return 401."
+PR_TITLE = "Refactor shared validation in auth module"
+PR_DIFF  = (
+    "Extracted token validation from auth.py into a new shared validate.py utility.\n"
+    "Updated inline error messages for clarity. No behavior changes.\n"
+    "Added doc examples for the new error format.\n"
+    "Files: src/auth.py (-40 lines), src/validate.py (+55 lines, new), docs/auth-errors.md"
+)
 
 print("=" * 65)
 print("  Demo 3: Inference Parameters — Temp, Max Tokens, Cost")
@@ -40,9 +45,11 @@ for temp in [0.0, 0.3, 0.7, 1.0]:
     print(f"    summary=\"{result.summary[:70]}...\"")
     print()
 
-print("  temp=0.0    → deterministic. Same output every time.")
-print("  temp=0.7    → varies. Content drifts, fields remain valid.")
-print("  temp=1.0    → creative. May flip severity or wording.")
+print("  Why this diff? Auth → 'critical' per system prompt.")
+print("  But it's a refactor with docs → could be 'medium' or 'low'.")
+print("  temp=0.0 → picks one answer, sticks to it.")
+print("  temp=0.7 → may flip between 'critical' and 'medium'.")
+print("  temp=1.0 → explores wider: 'low' (docs), 'critical' (auth), 'high' (logic).")
 print("  Key: Pydantic guarantees VALIDITY. Temperature controls CREATIVITY.")
 print()
 
