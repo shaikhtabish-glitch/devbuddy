@@ -112,7 +112,12 @@ print(answer)
 
 The model should answer from the retrieved chunks — not from its training data. Verify: does the answer match the content in `shared/data/payment-api-spec.md`?
 
-> **💡 What does `k` control?** `k` is the number of chunks retrieved from the vector store. `k=3` is the default — enough for a focused question, but content split across 4+ chunks (like our endpoints list) will be missed. Try `k=4` or `k=5` and compare. Higher `k` = more context, more tokens, more cost. Lower `k` = cheaper but risk missing relevant content. There's no "correct" value — it depends on your document structure and question complexity. Play with it.
+> **💡 What does `k` control?** `k` is the number of chunks retrieved. `k=3` is the default — enough for a focused question, but content split across 4+ chunks (like our endpoints list) will be missed. Try `k=4` or `k=5` and compare. Higher `k` = more context, more tokens, more cost. Lower `k` = cheaper but risk missing relevant content. There's no "correct" value — it depends on your document structure and question complexity. Play with it.
+>
+> **Other knobs worth turning:**
+> - **`chunk_overlap`** (default: 64) — how many tokens adjacent chunks share. Higher overlap prevents context from being split across chunk boundaries (e.g., a sentence cut in half). Tradeoff: more redundancy = more chunks to embed and store. Try `overlap=0` vs `overlap=128` and see how retrieval changes.
+> - **`temperature`** on `grounded_answer()` — controls how deterministic the LLM answer is. `temperature=0` for factual QA, `temperature=0.7` to see if the model gets creative with the retrieved context (and potentially drifts from it).
+> - **The system prompt itself** — open `src/rag.py` and read the `SystemMessage` in `grounded_answer()`. Change "If the context does not contain the answer, say so" to something else. What happens to out-of-corpus questions? The prompt IS the guardrail.
 
 ---
 
