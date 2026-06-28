@@ -11,8 +11,7 @@ from src.llm import get_llm
 from langchain_core.messages import HumanMessage
 
 print("=" * 60)
-print("  Demo 2: Prompt with JSON Instructions")
-print("  Same PR. Asked for JSON. Temperature = 0.7")
+print("  Demo 2: Prompt JSON — 'Return JSON' Is a Request")
 print("=" * 60)
 print()
 
@@ -44,8 +43,6 @@ for i in range(3):
 print(f"  Result: {passed}/3 runs produced valid JSON")
 print()
 print("=" * 60)
-print("  What we learned:")
-print("  • 'Return JSON' in the prompt is a request, not a guarantee")
-print("  • At temperature=0.7, the model sometimes ignores the request")
-print("  • This is hope-based architecture — it works until it doesn't")
+print("  'Return JSON' is a request, not a guarantee.")
+print("  This is hope-based architecture.")
 print("=" * 60)

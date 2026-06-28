@@ -9,8 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from src.schemas import analyze_pr
 
 print("=" * 60)
-print("  Demo 3: Pydantic Schema")
-print("  Same PR. Schema-constrained. Temperature = 0.7")
+print("  Demo 3: Pydantic Schema — Contract, Not Request")
 print("=" * 60)
 print()
 
@@ -28,13 +27,9 @@ for i in range(3):
     print(f"         )")
 
 print()
-print(f"  Result: {passed}/3 runs — always a valid typed object")
+print(f"  Result: {passed}/3 — always a valid typed object")
 print()
 print("=" * 60)
-print("  What we learned:")
-print("  • Pydantic schema is a contract, not a request")
-print("  • The model CANNOT return output that violates the schema")
-print("  • Same temperature (0.7) — 0 failures vs prompt-only's N failures")
-print()
-print("  Prompt JSON = hope. Pydantic schema = engineering.")
+print("  Schema is a contract, not a request.")
+print("  Prompt JSON = hope. Pydantic = engineering.")
 print("=" * 60)
