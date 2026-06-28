@@ -112,6 +112,8 @@ print(answer)
 
 The model should answer from the retrieved chunks — not from its training data. Verify: does the answer match the content in `shared/data/payment-api-spec.md`?
 
+> **💡 What does `k` control?** `k` is the number of chunks retrieved from the vector store. `k=3` is the default — enough for a focused question, but content split across 4+ chunks (like our endpoints list) will be missed. Try `k=4` or `k=5` and compare. Higher `k` = more context, more tokens, more cost. Lower `k` = cheaper but risk missing relevant content. There's no "correct" value — it depends on your document structure and question complexity. Play with it.
+
 ---
 
 ### Step 3: Out-of-corpus vs In-corpus (5 min)
