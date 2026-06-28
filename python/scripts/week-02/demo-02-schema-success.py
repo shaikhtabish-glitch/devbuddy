@@ -1,7 +1,10 @@
 """Demo 2: Schema → Success
 Same PR. Same model. Now with Pydantic schema — returns typed object.
-Run: python scripts/demo-02-schema-success.py
+Run: python scripts/week-02/demo-02-schema-success.py
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 from src.schemas import analyze_pr
 
 print("=" * 60)

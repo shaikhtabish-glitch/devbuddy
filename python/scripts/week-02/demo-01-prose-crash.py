@@ -1,7 +1,10 @@
 """Demo 1: Prose → Crash
 Shows why free-text LLM responses break pipelines.
-Run: python scripts/demo-01-prose-crash.py
+Run: python scripts/week-02/demo-01-prose-crash.py
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 import json
 from src.llm import get_llm
 from langchain_core.messages import HumanMessage

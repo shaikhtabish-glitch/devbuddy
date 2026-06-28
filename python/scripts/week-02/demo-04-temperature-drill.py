@@ -1,7 +1,10 @@
 """Demo 4: Temperature Drill
 Same PR at different temperatures. Watch the output drift.
-Run: python scripts/demo-04-temperature-drill.py
+Run: python scripts/week-02/demo-04-temperature-drill.py
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 from src.schemas import analyze_pr
 
 print("=" * 60)

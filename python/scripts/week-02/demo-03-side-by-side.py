@@ -1,7 +1,10 @@
 """Demo 3: Side-by-Side — Prompt-Only JSON vs Pydantic Schema
 3 runs each at temperature=0.7. Which approach survives?
-Run: python scripts/demo-03-side-by-side.py
+Run: python scripts/week-02/demo-03-side-by-side.py
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 import json
 from src.llm import get_llm
 from src.schemas import analyze_pr
