@@ -86,7 +86,7 @@ print(f"Indexed {count} chunks")
 
 **Check:** After running, `ls chroma_db/` should show the ChromaDB index files.
 
-**Want to understand the implementation?** Open `src/rag.py`. Read `index_documents()` — it uses `DirectoryLoader` → `RecursiveCharacterTextSplitter` → `HuggingFaceEmbeddings` → `Chroma.from_documents()`. This is the standard LangChain RAG pattern.
+**Want to understand the implementation?** Open `src/rag.py`. Read `index_documents()` — it uses `DirectoryLoader` → `RecursiveCharacterTextSplitter` → `HuggingFaceEmbeddings` → `Chroma.from_documents()`. This is the standard LangChain RAG pattern. Note the separators: `\n# `, `\n## `, `\n### ` — single `#` is critical for splitting top-level document titles.
 
 ---
 
@@ -95,7 +95,10 @@ print(f"Indexed {count} chunks")
 Now query the index. Ask a question that's clearly answered in the documents:
 
 ```python
-from src.rag import retrieve, grounded_answer
+from src.rag import index_documents, retrieve, grounded_answer
+
+# Ensure the index exists (if you skipped Step 1 or restarted your shell)
+index_documents()
 
 # Retrieve top-3 chunks for a question
 chunks = retrieve("What endpoints does the payment API expose?", k=3)
@@ -116,7 +119,9 @@ The model should answer from the retrieved chunks — not from its training data
 Our system prompt tells the model: "If the context does not contain the answer, say so." Test it:
 
 ```python
-from src.rag import grounded_answer_with_chunks
+from src.rag import index_documents, grounded_answer_with_chunks
+
+index_documents()  # ensure the index exists
 
 # Out-of-corpus — model should decline, not hallucinate
 answer, chunks = grounded_answer_with_chunks(
@@ -163,7 +168,9 @@ for size in [256, 512, 1024]:
 Pure vector search finds semantic similarity. But keyword matches (BM25) catch exact names, IDs, and error codes:
 
 ```python
-from src.rag import hybrid_search
+from src.rag import index_documents, retrieve, hybrid_search
+
+index_documents()  # ensure the index exists
 
 # Compare pure vector vs hybrid
 vec_chunks = retrieve("payment-api timeout", k=3)

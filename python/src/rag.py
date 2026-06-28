@@ -75,7 +75,7 @@ def index_documents(
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        separators=["\n## ", "\n### ", "\n#### ", "\n", " ", ""],
+        separators=["\n# ", "\n## ", "\n### ", "\n#### ", "\n", " ", ""],
     )
     chunks = splitter.split_documents(docs)
 
