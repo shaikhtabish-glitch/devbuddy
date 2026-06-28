@@ -13,13 +13,13 @@ print("  Demo 1: Plain English — No Schema, Temperature Drift")
 print("=" * 60)
 print()
 
-pr = "Fix login redirect loop in auth-service. Changed auth.py line 42-58."
+pr = "Tell a story in 2 lines for a character Allan and Tim."
 
 for temp in [0.0, 0.5, 1.0]:
     llm = get_llm(temperature=temp)
-    response = llm.invoke([HumanMessage(content=f"Summarize: {pr}")])
+    response = llm.invoke([HumanMessage(content=pr)])
     print(f"  temp={temp}:")
-    print(f"    {response.content.strip()[:100]}")
+    print(f"    {response.content.strip()}")
     print()
 
 print("=" * 60)
