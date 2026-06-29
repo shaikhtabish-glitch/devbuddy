@@ -30,6 +30,7 @@ from src.tools import (
 
 class AgentState(TypedDict):
     query: str
+    service_name: str
     context: str
     build_status: str
     deploys: str
@@ -51,6 +52,27 @@ def _estimate_cost(response) -> float:
 # Nodes — each is one step in the workflow
 # ═══════════════════════════════════════════════════════════════
 
+def extract_service(state: AgentState) -> AgentState:
+    """Extract the service name from the user's query."""
+    if state.get("service_name"):
+        return state  # already extracted
+
+    llm = get_llm(temperature=0)
+    response = llm.invoke([
+        SystemMessage(content=(
+            "Extract the service name from the user's query. "
+            "Respond with EXACTLY ONE WORD: the service name. "
+            "Known services: auth-service, payment-api, inventory-service. "
+            "If no service is mentioned, respond with 'payment-api' as default."
+        )),
+        HumanMessage(content=state["query"]),
+    ])
+    state["service_name"] = response.content.strip().lower()
+    state["steps"] += 1
+    state["cost"] += _estimate_cost(response)
+    return state
+
+
 def retrieve_context(state: AgentState) -> AgentState:
     """Retrieve relevant documents from RAG."""
     chunks = retrieve(state["query"], k=3)
@@ -60,24 +82,27 @@ def retrieve_context(state: AgentState) -> AgentState:
 
 
 def check_build(state: AgentState) -> AgentState:
-    """Call get_build_status for the relevant service."""
-    result = get_build_status.invoke({"service_name": "payment-api"})
+    """Call get_build_status for the service named in the query."""
+    svc = state.get("service_name", "payment-api")
+    result = get_build_status.invoke({"service_name": svc})
     state["build_status"] = result
     state["steps"] += 1
     return state
 
 
 def check_deploys(state: AgentState) -> AgentState:
-    """Call get_recent_deploys for the relevant service."""
-    result = get_recent_deploys.invoke({"service_name": "payment-api", "limit": 3})
+    """Call get_recent_deploys for the service named in the query."""
+    svc = state.get("service_name", "payment-api")
+    result = get_recent_deploys.invoke({"service_name": svc, "limit": 3})
     state["deploys"] = result
     state["steps"] += 1
     return state
 
 
 def check_incidents(state: AgentState) -> AgentState:
-    """Call get_active_incidents for the relevant service."""
-    result = get_active_incidents.invoke({"service_name": "payment-api"})
+    """Call get_active_incidents for the service named in the query."""
+    svc = state.get("service_name", "payment-api")
+    result = get_active_incidents.invoke({"service_name": svc})
     state["incidents"] = result
     state["steps"] += 1
     return state
@@ -175,14 +200,16 @@ def guard(state: AgentState) -> str:
 
 def build_fixed_chain() -> StateGraph:
     """
-    Fixed 3-step chain: retrieve → build → report.
-    Predictable and auditable, but brittle — always checks payment-api.
+    Fixed 3-step chain: extract → retrieve → build → report.
+    Predictable and auditable, but brittle — always the same path.
     """
     graph = StateGraph(AgentState)
+    graph.add_node("extract_service", extract_service)
     graph.add_node("retrieve", retrieve_context)
     graph.add_node("check_build", check_build)
     graph.add_node("report", generate_report)
-    graph.set_entry_point("retrieve")
+    graph.set_entry_point("extract_service")
+    graph.add_edge("extract_service", "retrieve")
     graph.add_edge("retrieve", "check_build")
     graph.add_edge("check_build", "report")
     graph.add_edge("report", END)
@@ -192,17 +219,20 @@ def build_fixed_chain() -> StateGraph:
 def build_dynamic_agent() -> StateGraph:
     """
     Dynamic agent: model decides the next step at runtime.
-    All 4 data-collection nodes are available, plus report generation.
+    Extracts service name from query, then routes dynamically.
+    All 4 data-collection nodes available, plus report generation.
     Guard prevents runaway loops.
     """
     graph = StateGraph(AgentState)
+    graph.add_node("extract_service", extract_service)
     graph.add_node("retrieve", retrieve_context)
     graph.add_node("check_build", check_build)
     graph.add_node("check_deploys", check_deploys)
     graph.add_node("check_incidents", check_incidents)
     graph.add_node("report", generate_report)
 
-    graph.set_entry_point("retrieve")
+    graph.set_entry_point("extract_service")
+    graph.add_edge("extract_service", "retrieve")
 
     # After each node, the guard routes to the next step (or stops)
     graph.add_conditional_edges("retrieve", guard, {
@@ -252,6 +282,7 @@ def run_fixed_chain(query: str) -> dict:
     agent = build_fixed_chain()
     return agent.invoke({
         "query": query,
+        "service_name": "",
         "context": "",
         "build_status": "",
         "deploys": "",
@@ -269,6 +300,7 @@ def run_dynamic_agent(query: str) -> dict:
     agent = build_dynamic_agent()
     return agent.invoke({
         "query": query,
+        "service_name": "",
         "context": "",
         "build_status": "",
         "deploys": "",

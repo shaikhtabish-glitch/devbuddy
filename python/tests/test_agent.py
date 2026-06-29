@@ -2,8 +2,8 @@
 import pytest
 from src.rag import index_documents
 from src.agent import (
-    AgentState, retrieve_context, check_build, check_deploys,
-    check_incidents, generate_report, router, guard,
+    AgentState, extract_service, retrieve_context, check_build,
+    check_deploys, check_incidents, generate_report, router, guard,
     build_fixed_chain, build_dynamic_agent,
     run_fixed_chain, run_dynamic_agent,
     MAX_STEPS, MAX_COST,
@@ -33,11 +33,22 @@ def test_agent_imports_all_modules():
 def test_agent_state_fields():
     """AgentState has all required fields."""
     state = AgentState(
-        query="test", context="", build_status="", deploys="",
-        incidents="", report="", steps=0, cost=0.0,
+        query="test", service_name="", context="", build_status="",
+        deploys="", incidents="", report="", steps=0, cost=0.0,
     )
     assert state["query"] == "test"
     assert state["steps"] == 0
+
+
+def test_extract_service_detects_auth():
+    """Extracts auth-service from a query about auth."""
+    state = AgentState(
+        query="Is the auth-service healthy?", service_name="",
+        context="", build_status="", deploys="", incidents="",
+        report="", steps=0, cost=0.0,
+    )
+    result = extract_service(state)
+    assert "auth-service" in result["service_name"]
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -58,8 +69,8 @@ def _ensure_index():
 def base_state():
     return AgentState(
         query="Is payment-api healthy?",
-        context="", build_status="", deploys="",
-        incidents="", report="", steps=0, cost=0.0,
+        service_name="payment-api", context="", build_status="",
+        deploys="", incidents="", report="", steps=0, cost=0.0,
     )
 
 
