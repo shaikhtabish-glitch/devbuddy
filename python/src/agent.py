@@ -119,26 +119,34 @@ def generate_report(state: AgentState) -> AgentState:
     """Produce a structured readiness report from all collected data."""
     llm = get_llm(temperature=0)
 
+    # Build data section headers based on what was actually collected
+    sections = ["Summary — one sentence answering the user's query"]
+    data_parts = [f"Query: {state['query']}"]
+
+    if state["context"]:
+        sections.append("Relevant Documentation")
+        data_parts.append(f"Relevant docs:\n{state['context']}")
+    if state["build_status"]:
+        sections.append("Build Status")
+        data_parts.append(f"Build status: {state['build_status']}")
+    if state["deploys"]:
+        sections.append("Recent Deployments")
+        data_parts.append(f"Recent deployments: {state['deploys']}")
+    if state["incidents"]:
+        sections.append("Active Incidents")
+        data_parts.append(f"Active incidents: {state['incidents']}")
+
+    section_list = "\n".join(f"{i+1}. {s}" for i, s in enumerate(sections))
+    data_text = "\n\n".join(data_parts)
+
     response = llm.invoke([
         SystemMessage(content=(
-            "You are a site reliability engineer. Produce a service readiness report. "
-            "Use ONLY the data provided. If data is missing, note it as 'unknown'. "
-            "Do not invent information.\n\n"
-            "Format your report with these sections:\n"
-            "1. Summary — one sentence about the service state\n"
-            "2. Build Status — current health\n"
-            "3. Recent Deployments — what was deployed and when\n"
-            "4. Active Incidents — any ongoing issues\n"
-            "5. Readiness Verdict — READY or BLOCKED with specific reasons\n"
-            "6. Recommended Actions — what to do next"
+            "You are a site reliability engineer. Answer the user's query "
+            "using ONLY the data provided. Do not invent information. "
+            "Do not mention sections where no data was collected.\n\n"
+            f"Include these sections:\n{section_list}"
         )),
-        HumanMessage(content=(
-            f"Query: {state['query']}\n\n"
-            f"Relevant documentation:\n{state['context'] or '(none)'}\n\n"
-            f"Build status: {state['build_status'] or '(not checked)'}\n\n"
-            f"Recent deployments: {state['deploys'] or '(not checked)'}\n\n"
-            f"Active incidents: {state['incidents'] or '(not checked)'}"
-        )),
+        HumanMessage(content=data_text),
     ])
 
     state["report"] = response.content
