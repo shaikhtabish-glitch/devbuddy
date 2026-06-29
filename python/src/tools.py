@@ -1,113 +1,92 @@
 """
 Week 4 — Tool definitions + function calling
 
-Tools are real functions the model can decide to call.
+Tools retrieve data from Qdrant and synthesize it with an LLM.
+No hardcoded mock data — real retrieval from indexed documents.
+
 The model decides. Your code executes. This boundary is sacred.
 
 Imports: from src.llm import get_llm
 """
 import json
-import random
-import time
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from src.llm import get_llm
+from src.rag import retrieve, hybrid_search
+
+
+def _synthesize(query_type: str, service_name: str, chunks: list[str]) -> str:
+    """
+    Feed retrieved chunks to the LLM and synthesize a structured JSON result.
+    Replaces hardcoded mock data with real Qdrant-backed retrieval.
+    """
+    context = "\n\n---\n\n".join(chunks) if chunks else "(no data found)"
+    llm = get_llm(temperature=0)
+
+    response = llm.invoke([
+        SystemMessage(content=(
+            "You are a data extraction tool. The user is querying for "
+            f"{query_type} information about the service '{service_name}'. "
+            "You are given chunks retrieved from internal documents (deploy logs, "
+            "incident reports, API specs). Synthesize a JSON object from these chunks.\n\n"
+            "RULES:\n"
+            "- Only use data present in the provided chunks. Do not invent.\n"
+            "- If no relevant data is found, return {\"status\": \"unknown\", \"note\": \"No data found\"}\n"
+            "- Return ONLY valid JSON, no markdown, no explanation."
+        )),
+        HumanMessage(content=f"Service: {service_name}\n\nRetrieved chunks:\n{context}"),
+    ])
+
+    return response.content.strip()
 
 
 # ═══════════════════════════════════════════════════════════════
-# Tool definitions — mock implementations of live APIs
+# Tool definitions — Qdrant-backed, LLM-synthesized
 # ═══════════════════════════════════════════════════════════════
 
 @tool
 def get_build_status(service_name: str) -> str:
     """
     Return the current build/health status for a given service.
-
-    Returns a JSON string with status and last deploy timestamp.
-    Status is one of: 'healthy', 'degraded', 'down', 'unknown'.
+    Retrieves data from Qdrant and synthesizes with an LLM.
+    Status is one of: healthy, degraded, down, unknown.
     """
-    statuses = {
-        "auth-service": {
-            "service": "auth-service",
-            "status": "healthy",
-            "last_deploy": "2026-06-28T08:15:00Z",
-        },
-        "payment-api": {
-            "service": "payment-api",
-            "status": "degraded",
-            "last_deploy": "2026-06-28T06:45:00Z",
-            "failing_since": "2026-06-28T07:30:00Z",
-        },
-        "inventory-service": {
-            "service": "inventory-service",
-            "status": "unknown",
-            "last_deploy": "2026-06-20T11:00:00Z",
-        },
-    }
-    data = statuses.get(service_name)
-    if data is None:
-        return json.dumps({
-            "service": service_name,
-            "status": "unknown",
-            "error": f"No data for service '{service_name}'",
-        })
-    return json.dumps(data)
+    query = f"{service_name} build status deployment health"
+    chunks = retrieve(query, k=5)
+    return _synthesize("build/health status", service_name, chunks)
 
 
 @tool
 def get_recent_deploys(service_name: str, limit: int = 5) -> str:
     """
     Return the last N deployments for a given service.
-
+    Retrieves deployment history from Qdrant and synthesizes with an LLM.
     Each deploy has: sha, author, timestamp, status.
-    Status is one of: 'success', 'failed', 'rolling_back'.
     """
-    deploys = {
-        "auth-service": [
-            {"sha": "abc123def456", "author": "tabish", "timestamp": "2026-06-28T08:15:00Z", "status": "success"},
-            {"sha": "789ghi012jkl", "author": "alex", "timestamp": "2026-06-27T14:30:00Z", "status": "success"},
-        ],
-        "payment-api": [
-            {"sha": "def789ghi012", "author": "maria", "timestamp": "2026-06-28T06:45:00Z", "status": "success"},
-            {"sha": "jkl345mno678", "author": "maria", "timestamp": "2026-06-27T22:00:00Z", "status": "rolling_back"},
-            {"sha": "pqr901stu234", "author": "jordan", "timestamp": "2026-06-27T20:15:00Z", "status": "failed"},
-        ],
-        "inventory-service": [],
-    }
-    service_deploys = deploys.get(service_name, [])
-    return json.dumps(service_deploys[:limit], indent=2)
+    query = f"{service_name} deployment deploy log sha status"
+    chunks = hybrid_search(query, k=5)
+    raw = _synthesize("deployment history", service_name, chunks)
+    # Parse, limit, re-serialize
+    try:
+        data = json.loads(raw)
+        if isinstance(data, list):
+            data = data[:limit]
+        return json.dumps(data, indent=2)
+    except json.JSONDecodeError:
+        return raw
 
 
 @tool
 def get_active_incidents(service_name: str) -> str:
     """
     Return any active (unresolved) incidents for a given service.
-
+    Retrieves incident data from Qdrant and synthesizes with an LLM.
     Returns a JSON list of incident objects with id, severity, and summary.
     """
-    incidents = {
-        "payment-api": [
-            {
-                "id": "INC-842",
-                "severity": "Sev1",
-                "summary": "payment-api latency spike. 15% of requests affected. Error code 408.",
-                "status": "investigating",
-            },
-        ],
-        "auth-service": [],
-        "inventory-service": [
-            {
-                "id": "INC-901",
-                "severity": "Sev3",
-                "summary": "inventory-service data inconsistency between primary and replica.",
-                "status": "investigating",
-                "tracking": ["PROJ-891", "PROJ-892"],
-            },
-        ],
-    }
-    service_incidents = incidents.get(service_name, [])
-    return json.dumps(service_incidents, indent=2)
+    query = f"{service_name} incident INC error outage investigating"
+    chunks = hybrid_search(query, k=5)
+    return _synthesize("active incidents", service_name, chunks)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -143,16 +122,16 @@ def execute_tool_safely(tool_call: dict, max_retries: int = 2) -> str:
         })
 
     last_error = None
-    for attempt in range(1, max_retries + 2):  # 1 initial + N retries
+    for attempt in range(1, max_retries + 2):
         try:
             return tool_fn.invoke(tool_call["args"])
         except Exception as e:
             last_error = str(e)
             if attempt <= max_retries:
-                time.sleep(1)  # backoff before retry
-            continue
+                import time
+                time.sleep(1)
+                continue
 
-    # All retries exhausted — return structured error
     return json.dumps({
         "error": last_error,
         "tool": tool_name,
@@ -165,18 +144,6 @@ def execute_tool_safely(tool_call: dict, max_retries: int = 2) -> str:
 def run_tool_loop(user_query: str, temperature: float = 0.0) -> str:
     """
     Full tool-calling loop: Request → Decide → Execute → Return → Answer.
-
-    1. Send the user query to the LLM with tools bound.
-    2. If the model returns a tool call, execute it (with error handling).
-    3. Inject the result back into the conversation.
-    4. Ask the model to produce a final answer.
-
-    Args:
-        user_query: The user's question.
-        temperature: 0.0 for deterministic output.
-
-    Returns:
-        The model's final answer after any tool calls.
     """
     llm = get_llm(temperature=temperature)
     llm_with_tools = llm.bind_tools(ALL_TOOLS)
@@ -190,35 +157,22 @@ def run_tool_loop(user_query: str, temperature: float = 0.0) -> str:
         HumanMessage(content=user_query),
     ]
 
-    # Step 1 + 2: Request → Decide
     response = llm_with_tools.invoke(messages)
     messages.append(response)
 
-    # Step 3 + 4: Execute (if tools were called) → Return
     if response.tool_calls:
         for tc in response.tool_calls:
             result = execute_tool_safely(tc)
-            messages.append(ToolMessage(
-                content=result,
-                tool_call_id=tc["id"],
-            ))
+            messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
 
-        # Step 5: Answer (with tool results in context)
         final = llm_with_tools.invoke(messages)
         return final.content.strip()
 
-    # No tool calls — model answered directly
     return response.content.strip()
 
 
 def run_tool_loop_with_trace(user_query: str, temperature: float = 0.0) -> dict:
-    """
-    Same as run_tool_loop, but returns a trace of every step
-    for debugging and demonstration.
-
-    Returns:
-        dict with keys: answer, tool_calls, tool_results, steps
-    """
+    """Same as run_tool_loop, but returns a trace of every step."""
     llm = get_llm(temperature=temperature)
     llm_with_tools = llm.bind_tools(ALL_TOOLS)
 
@@ -249,10 +203,7 @@ def run_tool_loop_with_trace(user_query: str, temperature: float = 0.0) -> dict:
                 "tool": tc["name"],
                 "result": result[:200],
             })
-            messages.append(ToolMessage(
-                content=result,
-                tool_call_id=tc["id"],
-            ))
+            messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
             trace["steps"].append({"type": "execute", "tool": tc["name"], "result": result[:200]})
 
         final = llm_with_tools.invoke(messages)
