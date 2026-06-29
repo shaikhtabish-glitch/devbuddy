@@ -1,0 +1,258 @@
+# Week 5 — MCP: DevBuddy Joins an Ecosystem
+
+**Goal:** Move from one-off custom tools to a shared, reusable layer. Write tools once. Expose them over MCP. Any team's DevBuddy consumes them.
+
+---
+
+## Setup
+
+```bash
+cd python
+source .venv/bin/activate
+git pull upstream main
+pip install -r requirements.txt   # mcp>=1.0.0 should be installed
+
+# Qdrant must be running (Week 3+)
+docker-compose up -d
+```
+
+Verify you're ready:
+
+```bash
+python -c "import mcp; print('MCP SDK OK')"
+python -m pytest tests/test_tools.py -v -k "not run_tool_loop"
+```
+
+---
+
+## What You Have
+
+Open `src/mcp_server.py`. It's a stub. By the end of this session, it will:
+
+- Start an MCP server that exposes tools from `src/tools.py`
+- Accept client connections over stdio transport
+- Let any MCP client discover and call `get_build_status`, `get_recent_deploys`, `get_active_incidents`
+
+## The Architecture
+
+```
+┌──────────────────┐     ┌──────────────────┐     ┌─────┐
+│   MCP Server     │ ←── │   MCP Client     │ ←── │ LLM │
+│  (your tools)    │     │  (DevBuddy)      │     │     │
+│                  │     │                  │     │     │
+│ get_build_status │     │ 1. Discover tools│     │     │
+│ get_recent_      │     │ 2. Model decides │     │     │
+│   deploys        │     │ 3. Client calls  │     │     │
+│ get_active_      │     │    server        │     │     │
+│   incidents      │     │ 4. Returns result│     │     │
+└──────────────────┘     └──────────────────┘     └─────┘
+```
+
+**Write once. Consume anywhere.** Python, Node.js, Java — any MCP client can use your tools.
+
+## Files You'll Touch
+- `src/mcp_server.py` — the MCP server (imports `src.tools`)
+- `src/tools.py` — already built (3 tools with mock data)
+- `scripts/week-05/` — demo scripts
+
+---
+
+## In-Session Steps
+
+The moderator runs a demo first (stand up server + connect client). Watch, then follow these steps on your own machine.
+
+---
+
+### Step 1: Stand up the MCP server (10 min)
+
+`src/mcp_server.py` is a stub. The server wraps your existing tools and exposes them over MCP:
+
+```python
+# src/mcp_server.py
+import asyncio
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+
+from src.tools import get_build_status, get_recent_deploys, get_active_incidents
+
+app = Server("devbuddy-mcp")
+
+# Register tools from src/tools.py
+app.add_tool(get_build_status)
+app.add_tool(get_recent_deploys)
+app.add_tool(get_active_incidents)
+
+async def main():
+    async with stdio_server() as (read_stream, write_stream):
+        await app.run(read_stream, write_stream, app.create_initialization_options())
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Start it:
+
+```bash
+python src/mcp_server.py
+# → Server running on stdio. Waiting for client connections...
+```
+
+---
+
+### Step 2: Connect a client and call a tool (10 min)
+
+Open a second terminal. Use the MCP client to connect and call:
+
+```python
+# scripts/week-05/demo-01-mcp-client.py
+import asyncio
+from mcp.client.stdio import stdio_client
+from mcp import ClientSession
+
+async def main():
+    async with stdio_client("python src/mcp_server.py") as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+
+            # Discover available tools
+            tools = await session.list_tools()
+            print(f"Available tools: {[t.name for t in tools]}")
+
+            # Call get_build_status
+            result = await session.call_tool("get_build_status", {"service_name": "payment-api"})
+            print(f"Result: {result}")
+
+asyncio.run(main())
+```
+
+```bash
+python scripts/week-05/demo-01-mcp-client.py
+# → Available tools: ['get_build_status', 'get_recent_deploys', 'get_active_incidents']
+# → Result: {"status": "degraded", "last_deploy": "2026-06-28T06:45:00Z", ...}
+```
+
+**The full path:** client → MCP protocol → server → tool execution → response. Same tools as Week 4, but now over a shared protocol.
+
+---
+
+### Step 3: Debug — break the connection (10 min)
+
+Misconfigure intentionally to learn the error patterns:
+
+```bash
+# Wrong transport — try connecting to HTTP instead of stdio
+python -c "
+from mcp.client.sse import sse_client
+# This will fail — server is on stdio, not SSE
+"
+
+# Wrong tool name
+python -c "
+# Call 'get_buildstatus' instead of 'get_build_status'
+# → Tool not found error
+"
+```
+
+**These are the most common production issues.** You're debugging MCP connections. Learn the error messages — you'll see them again.
+
+---
+
+### Step 4: Add your own tool (10 min)
+
+Add a new tool to the server. Any tool:
+
+```python
+# In mcp_server.py, add before app.add_tool() calls:
+def get_server_time() -> str:
+    """Return the current server time."""
+    from datetime import datetime
+    return datetime.now().isoformat()
+
+app.add_tool(get_server_time)
+```
+
+Restart the server. Reconnect the client. Does `list_tools()` show your new tool? Call it. Does it work?
+
+**Every team can add their own tools to the shared server.** No copy-paste. No duplication. One source of truth.
+
+---
+
+### Step 5: Cross-room call (5 min)
+
+Find a partner. Get their machine's hostname or IP. Start your server on their machine (or yours) and connect from the other:
+
+```bash
+# On their machine:
+python src/mcp_server.py
+
+# On your machine — connect to their server
+# (stdio won't work cross-machine. For this demo, share screens
+#  or use HTTP transport if your blueprint supports it.)
+```
+
+**The goal:** prove that any client can call any server. Ecosystem achieved.
+
+---
+
+### Step 6: Explore (remaining time)
+
+```bash
+# Study the server implementation
+cat src/mcp_server.py
+
+# Run the full pipeline: MCP tools → LLM
+cat scripts/week-05/demo-02-mcp-with-llm.py
+```
+
+---
+
+## Acceptance Criteria
+- [ ] `python src/mcp_server.py` starts without errors
+- [ ] Client connects and `list_tools()` shows all registered tools
+- [ ] `call_tool("get_build_status", {"service_name": "payment-api"})` returns a result
+- [ ] Changing the tool name produces a clear error (not a crash)
+- [ ] You can explain: *"MCP takes our Week 4 tools and makes them available to any client, in any language."*
+
+---
+
+## Self-Learning (Before Week 6)
+
+> **The take-home is the shared ecosystem.** You'll extend the MCP server with your own tool and think through security.
+
+### Part A: Add your own tool
+- Add a new tool to the MCP server — not from `src/tools.py`, something you write
+- Ideas: `get_current_time()`, `get_user_info(name)`, a tool that reads a file, a tool that queries an API
+- Document it: tool name, description, parameters, what it returns
+
+### Part B: Security assessment
+- Write a 1-paragraph security note for your new tool:
+  - What does it expose? Is it read-only?
+  - What's the blast radius if called with bad arguments?
+  - What auth/rate-limiting/logging would you add before production?
+
+### Part C: MCP vs REST decision
+- Compare your MCP tool to an equivalent REST endpoint
+- When would you use MCP? When would plain REST be simpler?
+- Write a decision heuristic: "Use MCP when ___. Use REST when ___."
+
+### Part D: Cross-language test (optional)
+- If you have Node.js installed, try connecting to the Python MCP server from a Node.js MCP client
+- Does tool discovery work across languages? Does tool calling?
+- This is the promise of MCP — write once, consume anywhere.
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `ModuleNotFoundError: mcp` | `pip install mcp` — check requirements.txt |
+| Server starts but client can't connect | Are you using the right transport? stdio vs SSE? |
+| `call_tool` returns error | Check tool name matches exactly (case-sensitive) |
+| Server hangs | Ensure `asyncio.run(main())` is at the bottom of the file |
+
+---
+
+## Runbook Contribution
+
+Write a 1-paragraph ADR: "We chose to expose `get_build_status` via MCP rather than a bespoke REST endpoint because…"
