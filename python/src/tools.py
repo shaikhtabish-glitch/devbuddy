@@ -28,9 +28,11 @@ def _synthesize(query_type: str, service_name: str, chunks: list[str]) -> str:
         "build/health status": (
             "Extract ONLY the current build/health status. Return JSON with 'status' "
             "(one of: healthy, degraded, down, unknown) and 'last_deploy' (ISO timestamp). "
-            "Look for deployment status (success/rolling_back/failed) and health checks. "
-            "If a deploy was rolling_back or failed, status = degraded. "
-            "If health check returns ok, status = healthy. "
+            "Look for the MOST RECENT deployment by date/timestamp. "
+            "If the most recent deploy was 'success', status = healthy. "
+            "If the most recent deploy was 'rolling_back' or 'failed', status = degraded. "
+            "If there are multiple deploys, use the LATEST one. Ignore older deploys. "
+            "If health check returns ok AND deploys are fine, status = healthy. "
             "If no build/health data found, status = unknown. "
             "DO NOT include SLA, incidents, endpoints, or other unrelated data."
         ),

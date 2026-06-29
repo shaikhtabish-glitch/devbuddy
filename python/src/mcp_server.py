@@ -1,90 +1,110 @@
 """
 Week 5 — MCP Server: Shared Tool Ecosystem
 
-Exposes tools from src/tools.py over the Model Context Protocol.
-Write once. Any MCP client in any language can discover and call them.
-
-Imports: from src.tools import ...
+Exposes tools over the Model Context Protocol.
+Tools retrieve data from Qdrant and synthesize with an LLM.
+Write once. Any MCP client in any language can consume them.
 """
 import os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mcp.server.fastmcp import FastMCP
 
+from src.rag import retrieve, hybrid_search
+from src.llm import get_llm
+from langchain_core.messages import SystemMessage, HumanMessage
+
 mcp = FastMCP(
     name="devbuddy-mcp",
-    instructions=(
-        "DevBuddy MCP Server — exposes build status, deployment history, "
-        "and active incident data for engineering services."
-    ),
+    instructions="DevBuddy MCP Server — build status, deployments, incidents, docs.",
 )
 
 
-# ── Tools — wrapped as MCP-native functions ───────────────────
-#
-# We can't directly pass LangChain @tool objects to FastMCP (they're
-# StructuredTool instances, not plain functions). Instead, we re-wrap
-# the logic as MCP tools using FastMCP's @tool decorator.
+# ── Shared synthesis helper ───────────────────────────────────
+
+def _synthesize(query_type: str, service_name: str, chunks: list[str]) -> str:
+    """Feed retrieved chunks to LLM, synthesize concise JSON."""
+    context = "\n\n---\n\n".join(chunks) if chunks else "(no data found)"
+    llm = get_llm(temperature=0)
+
+    prompts = {
+        "build/health": (
+            "Extract current build/health status. JSON with 'status' "
+            "(healthy/degraded/down/unknown) and 'last_deploy' (ISO). "
+            "Use the MOST RECENT deploy. Success=healthy, rolling_back/failed=degraded."
+        ),
+        "deployments": (
+            "Extract deployment history. JSON array of {service, version, date, sha, author, status}. "
+            "Status: success/failed/rolling_back."
+        ),
+        "incidents": (
+            "Extract active (unresolved) incidents. JSON array of {id, severity, date, summary, status}. "
+            "Skip 'Resolved'. Only include 'investigating' or blank status."
+        ),
+        "docs": (
+            "Extract relevant documentation. JSON with 'endpoints' (array of paths), "
+            "'error_codes' (array of {code, meaning}), 'sla' (string), 'owner' (string)."
+        ),
+    }
+
+    response = llm.invoke([
+        SystemMessage(content=(
+            f"{prompts.get(query_type, 'Extract requested info.')}\n\n"
+            "RULES: Only use provided chunks. No invention. "
+            "If no data: {\"status\": \"unknown\"}. "
+            "Return ONLY valid JSON, no markdown."
+        )),
+        HumanMessage(content=f"Service: {service_name}\n\nChunks:\n{context}"),
+    ])
+    return response.content.strip()
+
+
+# ── Tools ─────────────────────────────────────────────────────
 
 @mcp.tool()
 def get_build_status(service_name: str) -> str:
-    """
-    Return the current build/health status for a given service.
-    Returns a JSON string with status and last deploy timestamp.
-    Status is one of: healthy, degraded, down, unknown.
-    """
-    statuses = {
-        "auth-service": {"status": "healthy", "last_deploy": "2026-06-28T08:15:00Z"},
-        "payment-api": {"status": "degraded", "last_deploy": "2026-06-28T06:45:00Z", "failing_since": "2026-06-28T07:30:00Z"},
-        "inventory-service": {"status": "unknown", "last_deploy": "2026-06-20T11:00:00Z"},
-    }
-    data = statuses.get(service_name)
-    if data is None:
-        return json.dumps({"status": "unknown", "error": f"No data for service '{service_name}'"})
-    return json.dumps(data)
+    """Current build/health status for a service. Returns JSON with status and last_deploy."""
+    chunks = retrieve(f"{service_name} deployment success failed rolling_back", k=4)
+    return _synthesize("build/health", service_name, chunks)
 
 
 @mcp.tool()
 def get_recent_deploys(service_name: str, limit: int = 5) -> str:
-    """
-    Return the last N deployments for a given service.
-    Each deploy has: sha, author, timestamp, status.
-    Status is one of: success, failed, rolling_back.
-    """
-    deploys = {
-        "auth-service": [
-            {"sha": "abc123def456", "author": "tabish", "timestamp": "2026-06-28T08:15:00Z", "status": "success"},
-            {"sha": "789ghi012jkl", "author": "alex", "timestamp": "2026-06-27T14:30:00Z", "status": "success"},
-        ],
-        "payment-api": [
-            {"sha": "def789ghi012", "author": "maria", "timestamp": "2026-06-28T06:45:00Z", "status": "success"},
-            {"sha": "jkl345mno678", "author": "maria", "timestamp": "2026-06-27T22:00:00Z", "status": "rolling_back"},
-            {"sha": "pqr901stu234", "author": "jordan", "timestamp": "2026-06-27T20:15:00Z", "status": "failed"},
-        ],
-        "inventory-service": [],
-    }
-    return json.dumps(deploys.get(service_name, [])[:limit], indent=2)
+    """Last N deployments for a service. JSON array of {version, date, sha, author, status}."""
+    chunks = hybrid_search(f"{service_name} deploy SHA author timestamp status", k=4)
+    raw = _synthesize("deployments", service_name, chunks)
+    try:
+        data = json.loads(raw)
+        if isinstance(data, list):
+            data = data[:limit]
+        return json.dumps(data, indent=2)
+    except json.JSONDecodeError:
+        return raw
 
 
 @mcp.tool()
 def get_active_incidents(service_name: str) -> str:
-    """
-    Return any active (unresolved) incidents for a given service.
-    Returns a JSON list of incident objects with id, severity, and summary.
-    """
-    incidents = {
-        "payment-api": [
-            {"id": "INC-842", "severity": "Sev1", "summary": "payment-api latency spike. 15% of requests affected. Error code 408.", "status": "investigating"},
-        ],
-        "auth-service": [],
-        "inventory-service": [
-            {"id": "INC-901", "severity": "Sev3", "summary": "inventory-service data inconsistency between primary and replica.", "status": "investigating", "tracking": ["PROJ-891", "PROJ-892"]},
-        ],
-    }
-    return json.dumps(incidents.get(service_name, []), indent=2)
+    """Active (unresolved) incidents for a service. JSON array of {id, severity, date, summary}."""
+    chunks = hybrid_search(f"{service_name} INC- Sev severity investigating unresolved", k=4)
+    return _synthesize("incidents", service_name, chunks)
 
 
-# ── Entry point ───────────────────────────────────────────────
+@mcp.tool()
+def get_service_docs(service_name: str) -> str:
+    """Relevant documentation for a service from Qdrant. JSON with endpoints, error_codes, sla, owner."""
+    chunks = retrieve(f"{service_name} API specification endpoints error codes SLA owner", k=4)
+    return _synthesize("docs", service_name, chunks)
+
+
+# ── Start up ──────────────────────────────────────────────────
+
+# Ensure Qdrant index exists (skip if already indexed)
+try:
+    retrieve("ping", k=1)
+except RuntimeError:
+    from src.rag import index_documents
+    index_documents(chunk_size=512)
+
 
 if __name__ == "__main__":
     import asyncio

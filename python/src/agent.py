@@ -18,9 +18,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.llm import get_llm
 from src.rag import retrieve
-from src.tools import (
+from src.mcp_tools import (
     get_build_status, get_recent_deploys, get_active_incidents,
-    execute_tool_safely, ALL_TOOLS,
+    get_service_docs, get_current_time,
 )
 
 
@@ -91,7 +91,7 @@ def _get_service(state: AgentState) -> str:
 
 def check_build(state: AgentState) -> AgentState:
     """Call get_build_status for the service named in the query."""
-    result = get_build_status.invoke({"service_name": _get_service(state)})
+    result = get_build_status(service_name=_get_service(state))
     state["build_status"] = result
     state["steps"] += 1
     return state
@@ -99,9 +99,7 @@ def check_build(state: AgentState) -> AgentState:
 
 def check_deploys(state: AgentState) -> AgentState:
     """Call get_recent_deploys for the service named in the query."""
-    result = get_recent_deploys.invoke({
-        "service_name": _get_service(state), "limit": 3
-    })
+    result = get_recent_deploys(service_name=_get_service(state), limit=3)
     state["deploys"] = result
     state["steps"] += 1
     return state
@@ -109,7 +107,7 @@ def check_deploys(state: AgentState) -> AgentState:
 
 def check_incidents(state: AgentState) -> AgentState:
     """Call get_active_incidents for the service named in the query."""
-    result = get_active_incidents.invoke({"service_name": _get_service(state)})
+    result = get_active_incidents(service_name=_get_service(state))
     state["incidents"] = result
     state["steps"] += 1
     return state
@@ -174,6 +172,7 @@ def router(state: AgentState) -> str:
             "- report    (if all NEEDED data has been collected for this specific query)\n"
             "- done      (if the task is complete or cannot proceed)\n\n"
             "IMPORTANT: Only run steps the query explicitly asks for. "
+            "If the query asks about docs/APIs/endpoints/SLA/specs → ONLY retrieve. Skip all tools. "
             "If the query only asks about health/status → ONLY check_build. Skip deploys and incidents. "
             "If the query only asks about deployments → ONLY check_deploys. Skip build and incidents. "
             "If the query only asks about incidents → ONLY check_incidents. Skip build and deploys. "
