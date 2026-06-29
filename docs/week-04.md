@@ -236,16 +236,19 @@ cat scripts/week-04/demo-03-tool-failure.py
 ## Self-Learning (Before Week 5)
 
 > **The take-home is error handling architecture.** Tool calling is easy. Surviving failure is engineering.
+>
+> Reference: `src/tools.py` has the full implementation — 3 tools, `execute_tool_safely()`, and the complete loop. Use it as a guide, but write your own from scratch.
 
 ### Part A: Multi-tool routing
-- Add 3 tools: `get_build_status`, `get_recent_deploys`, `get_active_incidents`
-- Write 5 questions that require different combinations of tools
+- Write your own 3 tools from scratch: `get_build_status`, `get_recent_deploys`, `get_active_incidents`
+- Use your own mock data — different from the pre-built version
+- Write 5 questions that require different combinations of tools (single tool, two tools, all three, none)
 - Document: which questions routed correctly? Which routed wrong? Why?
 
 ### Part B: Failure resilience
-- Add artificial latency (1–3s delay) and intermittent failures (30% error rate) to one tool
+- Add artificial latency (`time.sleep(1-3)`) and intermittent failures (30% error rate) to one tool
 - Build `execute_tool_safely()` with retry logic (max 2 attempts), fallback to cached data, and structured error responses
-- Document: how did the model behave when the tool failed? Did it retry? Give up? What would you change for production?
+- Run 10 queries. Document: how many succeeded on first try? How many needed a retry? How many exhausted retries? How did the model respond to each?
 
 ### Part C: The boundary diagram
 - Draw an architecture diagram showing where each concern lives:
@@ -255,12 +258,18 @@ cat scripts/week-04/demo-03-tool-failure.py
   - Error handling → your code (retry, fallback, circuit breaker)
   - Audit logging → your code
   - Final answer → model
-- Where does the human go? Add a human-in-the-loop step for high-severity failures.
+- Add a human-in-the-loop step: where does a human review or approve before the tool executes? What triggers it?
 
 ### Part D: Real API design
 - Identify one real API your team owns (build status, deployment history, on-call schedule, incident data)
-- Sketch the `@tool` definition. What parameters? What does it return? What errors can it throw?
-- You don't need to implement it. Just the design.
+- Sketch the `@tool` definition: name, description, parameters, return type, possible errors
+- You don't need to implement it. Just the design. Share it in the channel — others can use it as inspiration for their own tools.
+
+---
+
+## Runbook Contribution
+
+Write a 1-paragraph ADR: "We placed error-handling logic in the application layer, not the prompt, because…"
 
 ---
 
@@ -272,9 +281,3 @@ cat scripts/week-04/demo-03-tool-failure.py
 | `bind_tools` not found | Update langchain: `pip install --upgrade langchain-core` |
 | Model calls wrong tool | Improve tool descriptions. Make them specific and distinct. |
 | `ToolMessage` not found | Import from `langchain_core.messages` |
-
----
-
-## Runbook Contribution
-
-Write a 1-paragraph ADR: "We placed error-handling logic in the application layer, not the prompt, because…"
