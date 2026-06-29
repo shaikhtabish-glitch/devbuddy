@@ -1,16 +1,15 @@
 """
 Week 6 — Agent Orchestrator: Multi-Step Workflows
 
-Chains retrieval (Week 3), tool calling (Week 4), and structured output
+Chains retrieval (Week 3), MCP tool calling (Week 5), and structured output
 (Week 2) into an autonomous pipeline using LangGraph.
 
 Imports:
   from src.llm import get_llm
-  from src.schemas import ServiceReadinessReport
   from src.rag import retrieve
-  from src.tools import get_build_status, get_recent_deploys, get_active_incidents
+  MCP session for tool calls
 """
-import json
+import os, sys, json, asyncio
 from typing import TypedDict
 
 from langgraph.graph import StateGraph, END
@@ -18,10 +17,46 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.llm import get_llm
 from src.rag import retrieve
-from src.mcp_tools import (
-    get_build_status, get_recent_deploys, get_active_incidents,
-    get_service_docs, get_current_time,
-)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Agent State — carried across all steps
+# ═══════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════
+# MCP Session — persistent connection to the tool server
+# ═══════════════════════════════════════════════════════════════
+
+SERVER_SCRIPT = os.path.join(os.path.dirname(__file__), "mcp_server.py")
+_mcp_session = None
+
+
+def _get_mcp_session():
+    """Return a persistent MCP session. Connects once, reused across calls."""
+    global _mcp_session
+    if _mcp_session is not None:
+        return _mcp_session
+
+    from mcp.client.stdio import stdio_client
+    from mcp import ClientSession, StdioServerParameters
+
+    params = StdioServerParameters(command="python", args=[SERVER_SCRIPT])
+    _mcp_session = (stdio_client(params), None)  # placeholder
+    return _mcp_session
+
+
+def _call_mcp_tool(tool_name: str, args: dict) -> str:
+    """Call a tool on the MCP server. Creates session on first call."""
+    async def _call():
+        from mcp.client.stdio import stdio_client
+        from mcp import ClientSession, StdioServerParameters
+        params = StdioServerParameters(command="python", args=[SERVER_SCRIPT])
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.call_tool(tool_name, args)
+                return result.content[0].text if result.content else "no result"
+    return asyncio.run(_call())
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -90,24 +125,26 @@ def _get_service(state: AgentState) -> str:
 
 
 def check_build(state: AgentState) -> AgentState:
-    """Call get_build_status for the service named in the query."""
-    result = get_build_status(service_name=_get_service(state))
+    """Call get_build_status via MCP server."""
+    result = _call_mcp_tool("get_build_status", {"service_name": _get_service(state)})
     state["build_status"] = result
     state["steps"] += 1
     return state
 
 
 def check_deploys(state: AgentState) -> AgentState:
-    """Call get_recent_deploys for the service named in the query."""
-    result = get_recent_deploys(service_name=_get_service(state), limit=3)
+    """Call get_recent_deploys via MCP server."""
+    result = _call_mcp_tool("get_recent_deploys", {
+        "service_name": _get_service(state), "limit": 3
+    })
     state["deploys"] = result
     state["steps"] += 1
     return state
 
 
 def check_incidents(state: AgentState) -> AgentState:
-    """Call get_active_incidents for the service named in the query."""
-    result = get_active_incidents(service_name=_get_service(state))
+    """Call get_active_incidents via MCP server."""
+    result = _call_mcp_tool("get_active_incidents", {"service_name": _get_service(state)})
     state["incidents"] = result
     state["steps"] += 1
     return state
