@@ -29,15 +29,18 @@ def get_build_status(service_name: str) -> str:
     """
     statuses = {
         "auth-service": {
+            "service": "auth-service",
             "status": "healthy",
             "last_deploy": "2026-06-28T08:15:00Z",
         },
         "payment-api": {
+            "service": "payment-api",
             "status": "degraded",
             "last_deploy": "2026-06-28T06:45:00Z",
             "failing_since": "2026-06-28T07:30:00Z",
         },
         "inventory-service": {
+            "service": "inventory-service",
             "status": "unknown",
             "last_deploy": "2026-06-20T11:00:00Z",
         },
@@ -45,6 +48,7 @@ def get_build_status(service_name: str) -> str:
     data = statuses.get(service_name)
     if data is None:
         return json.dumps({
+            "service": service_name,
             "status": "unknown",
             "error": f"No data for service '{service_name}'",
         })
