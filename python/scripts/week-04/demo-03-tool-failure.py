@@ -83,19 +83,22 @@ for label, description in scenarios:
 
     response = llm_with_tools.invoke([HumanMessage(content=question)])
 
+    print(f"       Query:  {question}")
+    print(f"       Decide: model calls get_build_status('payment-api')")
+
     if response.tool_calls:
         messages = [HumanMessage(content=question), response]
         for tc in response.tool_calls:
             result = execute_tool_safely(tc, TOOLS_MAP)
             parsed = json.loads(result)
             if "error" in parsed:
-                print(f"       ❌ FAILED after {parsed['attempts']} attempts")
-                print(f"       Error: {parsed['error']}")
+                print(f"       Result: ❌ FAILED after {parsed['attempts']} attempts")
+                print(f"               {parsed['error']}")
             else:
-                print(f"       ✅ SUCCESS")
+                print(f"       Result: ✅ {result}")
             messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
         final = llm_with_tools.invoke(messages)
-        print(f"       Model: {final.content}")
+        print(f"       Answer: {final.content}")
     print()
 
 print("=" * 70)
