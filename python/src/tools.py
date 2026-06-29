@@ -18,22 +18,46 @@ from src.rag import retrieve, hybrid_search
 
 def _synthesize(query_type: str, service_name: str, chunks: list[str]) -> str:
     """
-    Feed retrieved chunks to the LLM and synthesize a structured JSON result.
-    Replaces hardcoded mock data with real Qdrant-backed retrieval.
+    Feed retrieved chunks to the LLM and synthesize a concise JSON result.
+    Only returns data relevant to the query type — not everything in the chunks.
     """
     context = "\n\n---\n\n".join(chunks) if chunks else "(no data found)"
     llm = get_llm(temperature=0)
 
+    type_prompts = {
+        "build/health status": (
+            "Extract ONLY the current build/health status. Return JSON with 'status' "
+            "(one of: healthy, degraded, down, unknown) and 'last_deploy' (ISO timestamp). "
+            "Look for deployment status (success/rolling_back/failed) and health checks. "
+            "If a deploy was rolling_back or failed, status = degraded. "
+            "If health check returns ok, status = healthy. "
+            "If no build/health data found, status = unknown. "
+            "DO NOT include SLA, incidents, endpoints, or other unrelated data."
+        ),
+        "deployment history": (
+            "Extract ONLY deployment history. Return a JSON array of deploys, each with: "
+            "service, version, date, sha, author, status (success/failed/rolling_back). "
+            "DO NOT include incidents, SLA, health checks, or other unrelated data."
+        ),
+        "active incidents": (
+            "Extract ONLY active (unresolved) incidents. Return a JSON array of incidents, "
+            "each with: id, severity, date, summary, status (investigating/resolved). "
+            "Skip incidents with status 'Resolved'. "
+            "DO NOT include deployments, SLA, health checks, or other unrelated data."
+        ),
+    }
+
+    instructions = type_prompts.get(query_type, "Extract the requested information.")
+
     response = llm.invoke([
         SystemMessage(content=(
-            "You are a data extraction tool. The user is querying for "
-            f"{query_type} information about the service '{service_name}'. "
-            "You are given chunks retrieved from internal documents (deploy logs, "
-            "incident reports, API specs). Synthesize a JSON object from these chunks.\n\n"
+            "You are a data extraction tool. "
+            f"{instructions}\n\n"
             "RULES:\n"
             "- Only use data present in the provided chunks. Do not invent.\n"
-            "- If no relevant data is found, return {\"status\": \"unknown\", \"note\": \"No data found\"}\n"
-            "- Return ONLY valid JSON, no markdown, no explanation."
+            "- If no relevant data is found, return {\"status\": \"unknown\"}\n"
+            "- Return ONLY valid JSON, no markdown, no explanation.\n"
+            "- Be CONCISE. Return only what was asked for, nothing extra."
         )),
         HumanMessage(content=f"Service: {service_name}\n\nRetrieved chunks:\n{context}"),
     ])
@@ -52,8 +76,8 @@ def get_build_status(service_name: str) -> str:
     Retrieves data from Qdrant and synthesizes with an LLM.
     Status is one of: healthy, degraded, down, unknown.
     """
-    query = f"{service_name} build status deployment health"
-    chunks = retrieve(query, k=5)
+    query = f"{service_name} deployment success failed rolling_back"
+    chunks = retrieve(query, k=4)
     return _synthesize("build/health status", service_name, chunks)
 
 
@@ -64,10 +88,9 @@ def get_recent_deploys(service_name: str, limit: int = 5) -> str:
     Retrieves deployment history from Qdrant and synthesizes with an LLM.
     Each deploy has: sha, author, timestamp, status.
     """
-    query = f"{service_name} deployment deploy log sha status"
-    chunks = hybrid_search(query, k=5)
+    query = f"{service_name} deploy SHA author timestamp status"
+    chunks = hybrid_search(query, k=4)
     raw = _synthesize("deployment history", service_name, chunks)
-    # Parse, limit, re-serialize
     try:
         data = json.loads(raw)
         if isinstance(data, list):
@@ -84,8 +107,8 @@ def get_active_incidents(service_name: str) -> str:
     Retrieves incident data from Qdrant and synthesizes with an LLM.
     Returns a JSON list of incident objects with id, severity, and summary.
     """
-    query = f"{service_name} incident INC error outage investigating"
-    chunks = hybrid_search(query, k=5)
+    query = f"{service_name} INC- Sev severity investigating unresolved"
+    chunks = hybrid_search(query, k=4)
     return _synthesize("active incidents", service_name, chunks)
 
 
