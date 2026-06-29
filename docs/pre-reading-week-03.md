@@ -105,7 +105,6 @@ A chunk ranked #1 by vector and #5 by keyword gets `1/61 + 1/65 = 0.0318`. A chu
 
 ## Further Reading
 
-- [Vector Databases Simply Explained (YouTube)](https://youtu.be/dN0lsF2cvm4) — embeddings, indexes, and how vector DBs work.
 - [Vector Embeddings — Intuition & Visuals (YouTube)](https://youtu.be/ziiF1eFM3_4) — visual walkthrough of how embeddings work.
 - [BM25 & TF-IDF Explained (YouTube)](https://youtu.be/lPTcTh5sRug) — video explainer of keyword scoring algorithms.
 - [Reciprocal Rank Fusion Explained (YouTube)](https://youtu.be/fHwPpBvjnSs) — how RRF combines rankings without tuning.
