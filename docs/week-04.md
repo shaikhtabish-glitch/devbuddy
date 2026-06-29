@@ -220,6 +220,9 @@ cat scripts/week-04/demo-02-tool-routing.py
 
 # Break things and observe recovery
 cat scripts/week-04/demo-03-tool-failure.py
+
+# Full trace with all 3 tools — see every step
+python scripts/week-04/demo-04-full-trace.py
 ```
 
 ---
