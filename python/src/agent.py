@@ -81,10 +81,17 @@ def retrieve_context(state: AgentState) -> AgentState:
     return state
 
 
+def _get_service(state: AgentState) -> str:
+    """Get the service name from state. Fails if not set."""
+    svc = state.get("service_name", "").strip()
+    if not svc:
+        raise RuntimeError("service_name not set — extract_service must run first")
+    return svc
+
+
 def check_build(state: AgentState) -> AgentState:
     """Call get_build_status for the service named in the query."""
-    svc = state.get("service_name", "payment-api")
-    result = get_build_status.invoke({"service_name": svc})
+    result = get_build_status.invoke({"service_name": _get_service(state)})
     state["build_status"] = result
     state["steps"] += 1
     return state
@@ -92,8 +99,9 @@ def check_build(state: AgentState) -> AgentState:
 
 def check_deploys(state: AgentState) -> AgentState:
     """Call get_recent_deploys for the service named in the query."""
-    svc = state.get("service_name", "payment-api")
-    result = get_recent_deploys.invoke({"service_name": svc, "limit": 3})
+    result = get_recent_deploys.invoke({
+        "service_name": _get_service(state), "limit": 3
+    })
     state["deploys"] = result
     state["steps"] += 1
     return state
@@ -101,8 +109,7 @@ def check_deploys(state: AgentState) -> AgentState:
 
 def check_incidents(state: AgentState) -> AgentState:
     """Call get_active_incidents for the service named in the query."""
-    svc = state.get("service_name", "payment-api")
-    result = get_active_incidents.invoke({"service_name": svc})
+    result = get_active_incidents.invoke({"service_name": _get_service(state)})
     state["incidents"] = result
     state["steps"] += 1
     return state
@@ -171,6 +178,8 @@ def router(state: AgentState) -> str:
             f"- Build status checked: {'YES' if state['build_status'] else 'NO'}\n"
             f"- Deploys checked: {'YES' if state['deploys'] else 'NO'}\n"
             f"- Incidents checked: {'YES' if state['incidents'] else 'NO'}\n\n"
+            f"NEVER return a step that already has data (YES above). "
+            f"If all needed data is YES, return 'report'.\n\n"
             f"Next step:"
         )),
     ])
@@ -189,7 +198,7 @@ MAX_COST = 2.00  # dollars
 
 
 def guard(state: AgentState) -> str:
-    """Stop the agent if step count or cost exceeds limits."""
+    """Stop if limits exceeded. Otherwise, let the router decide."""
     if state["steps"] >= MAX_STEPS:
         return "done"
     if state["cost"] >= MAX_COST:
