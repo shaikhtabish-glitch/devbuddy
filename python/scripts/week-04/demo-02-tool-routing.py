@@ -49,7 +49,7 @@ print()
 questions = [
     "Is the auth-service healthy?",
     "Show me the recent deployments for payment-api.",
-    "What was deployed recently and is everything healthy?",
+    "What was deployed recently for payment-api and is it healthy?",
 ]
 
 for q in questions:
@@ -72,5 +72,6 @@ for q in questions:
 print("=" * 70)
 print("  Q1 needed build status → model called get_build_status ✅")
 print("  Q2 needed deploy history → model called get_recent_deploys ✅")
-print("  Q3 needed both → model's choice depends on tool descriptions")
+print("  Q3 needed both → model called both tools (service name was specified)")
+print("  Lesson: vague queries = model skips tools. Be specific.")
 print("=" * 70)
