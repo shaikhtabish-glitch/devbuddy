@@ -112,6 +112,7 @@ A chunk ranked #1 by vector and #5 by keyword gets `1/61 + 1/65 = 0.0318`. A chu
 - [BM25: The Most Famous Text Search Algorithm](https://arpitbhayani.me/blogs/bm25/) — deep dive with code and visualizations.
 - [Reciprocal Rank Fusion (Cormack et al.)](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) — the original 2-page paper. Simple, elegant, effective.
 - [What is Vector Search? (Pinecone)](https://www.pinecone.io/learn/vector-search/) — visual explainer of embeddings and similarity search.
+- [Vector Databases Simply Explained (YouTube)](https://youtu.be/dN0lsF2cvm4) — embeddings, indexes, and how vector DBs work.
 - [Qdrant Hybrid Search](https://qdrant.tech/articles/hybrid-search/) — how a production vector DB implements hybrid retrieval.
 
 
