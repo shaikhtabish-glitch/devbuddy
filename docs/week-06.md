@@ -206,9 +206,10 @@ Run a query that would loop. The guard stops it at 10 steps. In production: cost
 # Study the agent implementation
 cat src/agent.py
 
-# Run the full demo
-python scripts/week-06/demo-01-fixed-chain.py
-python scripts/week-06/demo-02-dynamic-routing.py
+# Run the demos
+python scripts/week-06/demo-01-fixed-chain.py      # fixed vs broken
+python scripts/week-06/demo-02-dynamic-routing.py   # dynamic adaptation
+python scripts/week-06/demo-03-conversational-agent.py  # talk to DevBuddy
 ```
 
 ---
