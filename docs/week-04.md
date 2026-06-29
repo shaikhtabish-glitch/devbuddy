@@ -238,6 +238,8 @@ cat scripts/week-04/demo-03-tool-failure.py
 > **The take-home is error handling architecture.** Tool calling is easy. Surviving failure is engineering.
 >
 > Reference: `src/tools.py` has the full implementation — 3 tools, `execute_tool_safely()`, and the complete loop. Use it as a guide, but write your own from scratch.
+>
+> Docs: [LangChain Tools](https://docs.langchain.com/oss/python/langchain/tools) — `@tool` decorator, `StructuredTool`, `bind_tools()`, and tool error handling.
 
 ### Part A: Multi-tool routing
 - Write your own 3 tools from scratch: `get_build_status`, `get_recent_deploys`, `get_active_incidents`

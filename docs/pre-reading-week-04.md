@@ -78,6 +78,8 @@ def get_build_status(service_name: str) -> str:
 
 **Tool descriptions are code.** They go through review. They get versioned. They determine whether your system routes correctly or silently fails.
 
+> **Reference:** [LangChain Tools Documentation](https://docs.langchain.com/oss/python/langchain/tools) — `@tool` decorator, `StructuredTool`, `bind_tools()`, and tool error handling.
+
 ---
 
 ## When NOT to Use Tool Calling
