@@ -1,0 +1,54 @@
+# Week 4 — Tool Selection Eval
+#
+# Tests correct tool routing and error handling.
+# Run: npx promptfoo@latest eval --config week-04-tool-selection.yaml
+#
+# Prerequisites:
+#   export OPENROUTER_API_KEY=sk-or-your-key
+
+description: "Week 4 — Tool selection: routing accuracy, argument correctness"
+
+providers:
+  - id: openrouter:openai/gpt-4o-mini
+    label: gpt-4o-mini
+    config:
+      temperature: 0
+
+prompts:
+  - |-
+    You have access to the following tools:
+    - get_build_status(service_name) — returns current build health
+    - get_recent_deploys(service_name, limit) — returns recent deployments
+    - get_active_incidents(service_name) — returns active incidents
+
+    Answer the user's question. Call the appropriate tool(s) if needed.
+    If no tool is needed, answer directly.
+
+    Question: {{question}}
+
+tests:
+  - vars:
+      question: "Is the auth-service healthy?"
+    assert:
+      - type: contains
+        value: "healthy"
+
+  - vars:
+      question: "What were the last 3 deployments for payment-api?"
+    assert:
+      - type: contains
+        value: "deploy"
+
+  - vars:
+      question: "Are there any active incidents for the inventory-service?"
+    assert:
+      - type: contains
+        value: "incident"
+
+  - vars:
+      question: "What is 2 + 2?"
+    assert:
+      - type: contains
+        value: "4"
+      - type: not-contains
+        value: "tool"
