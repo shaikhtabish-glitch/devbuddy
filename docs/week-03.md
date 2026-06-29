@@ -227,26 +227,60 @@ With 8 documents, the top-5 may be identical. With 50+ docs, BM25 surfaces keywo
 
 ## Self-Learning (Before Week 4)
 
-> **The take-home is chunking + hybrid search.** You'll compare retrieval quality across chunk sizes and find real cases where hybrid beats pure vector.
+> **The take-home is context engineering.** Retrieval is only half the battle. The other half is what you do with the retrieved chunks — and what happens when you get it wrong.
 
-### Part A: Chunk size deep-dive
-- Index the doc set at 256, 512, and 1024 tokens
-- For each, run the same 3 questions and rate the top-3 retrieved chunks (1–5 scale)
-- Which size works best? Why? Document your findings.
+### Part A: Chunk size experiment (rigorous)
 
-### Part B: Hybrid search
-- Find at least one case where hybrid search gives a demonstrably better answer than pure vector
-- The "payment-api timeout" query is a starting point — find your own
-- Document why hybrid won: was it keyword matching? acronyms? error codes?
+Run demo-03 at all three sizes and rate the top-3 chunks for each question using **specific criteria**:
 
-### Part C: Borderline question
-- Ask a question that's partially in the corpus, partially not
-- Document: (a) where the model hallucinated, (b) what a production system would need to catch this, (c) whether RAG was the right tool or a database query would've been better
+| Criterion | 1 (poor) | 5 (excellent) |
+|-----------|----------|---------------|
+| **Relevance** | Chunk is about a different topic | Chunk directly answers the question |
+| **Completeness** | Single sentence, missing key info | Full context — setup steps, code style, PR rules all present |
+| **Noise** | Payment API chunks mixed into a setup question | All chunks from the correct document |
 
-### Part D: Cost analysis
-- Measure the cost of: embedding N documents + retrieval + LLM call
-- Compare to: stuffing all documents into the prompt
-- At what corpus size does retrieval become cheaper? (rough math is fine)
+Use these 3 questions (not just one):
+1. "How do I set up DevBuddy?"
+2. "What are the error codes for the payment API?"
+3. "What incidents happened in June 2026?"
+
+Create a comparison table. Which size wins across all three questions? Why?
+
+### Part B: Index your own document
+
+Add a document from your actual team to `shared/data/` — a README, runbook, API spec, or incident report. Index it. Write 3 questions it should answer. Test retrieval quality at 512 tokens. Does RAG answer correctly? What chunk size works best for your document? Document the results.
+
+This is the real test: does RAG work on *your* data, not just ours?
+
+### Part C: Break the guardrail
+
+Open `src/rag.py`. Find the `SystemMessage` in `grounded_answer()`. **Delete the line** that says:
+
+> "If the context does not contain the answer, say 'I don't have information about that in my knowledge base.' Never invent information."
+
+Re-index and ask an out-of-corpus question like *"What's the revenue forecast for Q4 2028?"* The model will now invent a confident, wrong answer. This is hallucination — the default behavior of an unguarded LLM.
+
+Now restore the guardrail and re-run. Document:
+- What did the model invent with the guardrail removed?
+- What does this tell you about deploying RAG without output validation?
+- If you had to ship a RAG feature tomorrow, would you trust the system prompt alone?
+
+### Part D: Cost analysis (concrete)
+
+Run `grounded_answer()` for 10 real questions against the indexed doc set. Log tokens per call using `response.usage_metadata`. Compute the actual cost:
+
+```
+cost = (input_tokens * 0.15 + output_tokens * 0.60) / 1_000_000
+```
+
+Now compute the estimated cost of prompt-stuffing: take the total token count of all 8 documents in `shared/data/` and add it to each query. Compare:
+
+| Approach | Tokens per query (avg) | Cost per 1,000 queries |
+|----------|----------------------|------------------------|
+| RAG (retrieve k=3) | ? | ? |
+| Prompt-stuffing (all docs) | ? | ? |
+
+At what doc set size does RAG become cheaper than stuffing? Extrapolate from your numbers.
 
 ---
 
