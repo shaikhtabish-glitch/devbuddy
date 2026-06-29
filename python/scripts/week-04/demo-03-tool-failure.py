@@ -1,26 +1,37 @@
 """
-Demo 3: Tool Failure — Break a tool, handle in application layer
+Demo 3: Tool Failure — Three scenarios, deterministic
 
-Shows what happens when a tool fails, and how application-layer
-error handling keeps the system running.
+Run 1: Tool succeeds normally.
+Run 2: Tool fails once, retry succeeds (resilience).
+Run 3: Tool fails all retries, returns structured error (graceful degradation).
+
+Shows application-layer error handling keeping the system running
+when tools fail — retry logic, fallback, and structured errors.
 
 Run: python scripts/week-04/demo-03-tool-failure.py
 """
-import os, sys, json, random
+import os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, ToolMessage
 from src.llm import get_llm
 
+# ── Tool with controllable failure ────────────────────────────
+
+_fail_count = 0
 
 @tool
 def get_build_status(service_name: str) -> str:
     """Return the current build health of a service."""
-    if random.random() < 0.4:  # 40% failure rate — demo shows both success and failure
+    global _fail_count
+    _fail_count += 1
+    # Run 1: success. Run 2: fail once then succeed. Run 3: fail always.
+    if _fail_count == 2:   # first call of Run 2 → fail once
         raise ConnectionError(f"Monitoring API unreachable for '{service_name}'")
-    statuses = {"auth-service": "healthy", "payment-api": "degraded"}
-    return json.dumps(statuses.get(service_name, {"status": "unknown"}))
+    if _fail_count >= 4:   # Run 3 onwards → always fail
+        raise ConnectionError(f"Monitoring API unreachable for '{service_name}'")
+    return json.dumps({"status": "degraded", "last_deploy": "2026-06-28T06:45:00Z"})
 
 
 def execute_tool_safely(tool_call, tools_map, max_retries=2):
@@ -35,7 +46,7 @@ def execute_tool_safely(tool_call, tools_map, max_retries=2):
             return tool_fn.invoke(tool_call["args"])
         except Exception as e:
             if attempt <= max_retries:
-                print(f"  ⚠️  Attempt {attempt} failed, retrying...")
+                print(f"       ⚠️  Attempt {attempt} failed, retrying...")
                 continue
             return json.dumps({
                 "error": str(e),
@@ -52,14 +63,23 @@ TOOLS_MAP = {t.name: t for t in TOOLS}
 llm = get_llm(temperature=0)
 llm_with_tools = llm.bind_tools(TOOLS)
 
+scenarios = [
+    ("normal", "Tool succeeds on first call. Happy path."),
+    ("retry", "Tool fails once, retry succeeds. Resilience."),
+    ("exhausted", "Tool fails all retries. Graceful degradation."),
+]
+
 print("=" * 70)
-print("  Demo 3: Tool Failure — Handle in Application Layer")
+print("  Demo 3: Tool Failure — Three Deterministic Scenarios")
 print("=" * 70)
 print()
 
-for i in range(3):
+for label, description in scenarios:
     question = "Is the payment-api healthy?"
-    print(f"  Run {i+1} — User: {question}")
+    print(f"  ╔══════════════════════════════════════════════════════════════╗")
+    print(f"  ║  SCENARIO: {label:<12} — {description:<36} ║")
+    print(f"  ╚══════════════════════════════════════════════════════════════╝")
+    print()
 
     response = llm_with_tools.invoke([HumanMessage(content=question)])
 
@@ -69,16 +89,21 @@ for i in range(3):
             result = execute_tool_safely(tc, TOOLS_MAP)
             parsed = json.loads(result)
             if "error" in parsed:
-                print(f"  ❌ Tool failed after retries: {parsed['error'][:60]}...")
+                print(f"       ❌ FAILED after {parsed['attempts']} attempts")
+                print(f"       Error: {parsed['error']}")
             else:
-                print(f"  ✅ Tool succeeded: {result}")
+                print(f"       ✅ SUCCESS")
             messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
         final = llm_with_tools.invoke(messages)
-        print(f"  Model: {final.content}")
+        print(f"       Model: {final.content}")
     print()
 
 print("=" * 70)
-print("  The model might retry, apologize, or suggest alternatives.")
-print("  But YOUR CODE controls retry logic — not the model.")
-print("  Application-layer error handling is what ships.")
+print("  Scenario 1 → happy path. Tool works, model answers.")
+print("  Scenario 2 → transient failure. Retry succeeds. User never knows.")
+print("  Scenario 3 → persistent failure. Structured error returned.")
+print("               Model gracefully handles the degradation.")
+print()
+print("  YOUR CODE controls retry logic, fallback, and error format.")
+print("  The model only sees the final result — success or structured error.")
 print("=" * 70)
