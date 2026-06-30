@@ -227,6 +227,47 @@ python scripts/week-04/demo-04-full-trace.py
 
 ---
 
+### Bonus: Connect tools to your Week 3 RAG index (5 min)
+
+Your tools use hardcoded mock data — great for learning. But you already built
+a RAG pipeline in Week 3 with real documents. Let's connect them:
+
+```python
+from src.rag import retrieve
+from src.llm import get_llm
+from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage, SystemMessage
+import json
+
+@tool
+def get_build_status_from_docs(service_name: str) -> str:
+    """Return the build/health status for a service by searching our docs."""
+    chunks = retrieve(f"{service_name} build status health deploy", k=5)
+    context = "\n\n".join(chunks)
+
+    llm = get_llm(temperature=0)
+    response = llm.invoke([
+        SystemMessage(content=(
+            "Extract the build/health status from the context. "
+            "Return JSON with 'status' (healthy/degraded/down/unknown) "
+            "and 'last_deploy' (timestamp). Only use data from the context."
+        )),
+        HumanMessage(content=f"Service: {service_name}\n\nContext:\n{context}")
+    ])
+    return response.content
+```
+
+**What changed?** The tool interface is identical — same name pattern, same args,
+same return shape. But the data source went from a hardcoded dict to your Week 3
+vector store. This is the compositional pattern: `tools.py` doesn't need to import
+`rag.py`. The tool just needs data. Where that data comes from is an implementation
+detail.
+
+In Week 6, the agent will compose both modules directly — orchestrating retrieval
+and tool calls as separate steps. This bonus is just a preview of that pattern.
+
+---
+
 ## Acceptance Criteria
 - [ ] `get_build_status` is defined as a LangChain `@tool` and the model calls it with correct arguments
 - [ ] The full decide → execute → return loop runs end-to-end
