@@ -4,6 +4,7 @@ Demo 2: Dynamic Routing — model decides the steps
 Runs the dynamic agent on 3 different queries. The model
 decides which steps to execute based on the query content.
 
+Requires: MCP server running (python src/mcp_server.py in another terminal)
 Run: python scripts/week-06/demo-02-dynamic-routing.py
 """
 import os, sys

@@ -4,6 +4,7 @@ Demo 3: Conversational Agent — talk to DevBuddy
 Type queries. The dynamic agent plans, calls tools, and responds.
 Type 'quit' to exit, 'cost' to see cumulative spending.
 
+Requires: MCP server running (python src/mcp_server.py in another terminal)
 Run: python scripts/week-06/demo-03-conversational-agent.py
 """
 import os, sys
