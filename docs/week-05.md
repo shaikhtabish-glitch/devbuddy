@@ -134,30 +134,40 @@ asyncio.run(main())
 ```bash
 python scripts/week-05/demo-01-mcp-client.py
 
-  📡 Connected. Server exposes:
-      🏗️  get_build_status — Return the current build/health status...
-      🚀  get_recent_deploys — Return the last N deployments...
-      🚨  get_active_incidents — Return any active (unresolved) incidents...
+  📡  DISCOVER: list_tools()
+      🏗️  get_build_status
+          Return the current build/health status for a given service.
+      🚀  get_recent_deploys
+          Return the last N deployments for a given service.
+      🚨  get_active_incidents
+          Return any active (unresolved) incidents for a given service.
 
-  ── Querying build status ──
-      auth-service:   HEALTHY
-                      last deploy  2026-06-28T08:15:00Z
-      payment-api:    DEGRADED
-                      last deploy  2026-06-28T06:45:00Z
+  ───────────────────────────────────────────────────────────
+  🏗️  QUERY: get_build_status
+  ───────────────────────────────────────────────────────────
+      →  RESPONSE  auth-service:  HEALTHY
+                     last deploy  2026-06-28T08:15:00Z
+      →  RESPONSE  payment-api:   DEGRADED
+                     last deploy  2026-06-28T06:45:00Z
 
-  ── Recent deployments ──
-      ✅  abc123def456  tabish  2026-06-28T08:15:00Z
-      ✅  def789ghi012  maria   2026-06-28T06:45:00Z
+  ───────────────────────────────────────────────────────────
+  🚀  QUERY: get_recent_deploys(payment-api, limit=2)
+  ───────────────────────────────────────────────────────────
+      →  ✅  abc123def456  tabish   2026-06-28T08:15:00Z
+      →  ✅  def789ghi012  maria    2026-06-28T06:45:00Z
 
-  ── Active incidents ──
-      🚨  INC-842  Sev1  payment-api latency spike. 15% affected.
+  ───────────────────────────────────────────────────────────
+  🚨  QUERY: get_active_incidents(payment-api)
+  ───────────────────────────────────────────────────────────
+      →  Sev1    INC-842
+                  payment-api latency spike. 15% affected.
 
   All data from the Week 3 RAG index (Qdrant).
   Same tools as Week 4. Any MCP client can call them.
 ```
 
-**The story:** Connect → Discover 3 tools → Call them → Get structured results.
-All data comes from the RAG index (Week 3), served over a shared protocol (Week 5).
+**The story:** DISCOVER → QUERY → RESPONSE. The MCP protocol in action.
+All data from the RAG index (Week 3), served over a shared protocol (Week 5).
 
 ---
 
