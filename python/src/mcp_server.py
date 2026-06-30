@@ -10,11 +10,13 @@ Write once. Any MCP client in any language can discover and call these tools.
 
 Imports: from src.rag import retrieve, index_documents
          from src.llm import get_llm
+         from langchain_core.messages import HumanMessage, SystemMessage
 """
 import os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mcp.server.fastmcp import FastMCP
+from langchain_core.messages import HumanMessage, SystemMessage
 from src.rag import retrieve, index_documents
 from src.llm import get_llm
 
