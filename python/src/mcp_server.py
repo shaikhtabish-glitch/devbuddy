@@ -28,15 +28,23 @@ mcp = FastMCP(
 )
 
 
+# ── Lazy init: index once, reuse across all tool calls ────────
+
+_indexed = False
+
+def _ensure_index():
+    """Index documents once. Subsequent calls are no-ops."""
+    global _indexed
+    if not _indexed:
+        index_documents()
+        _indexed = True
+
+
 # ── Helper: retrieve + synthesise ─────────────────────────────
 
 def _synthesise(instructions: str, query: str, k: int = 5) -> str:
     """Retrieve relevant chunks from the RAG index and synthesise JSON with the LLM."""
-    try:
-        index_documents()  # ensure index exists
-    except Exception:
-        pass  # Qdrant may already have the collection
-
+    _ensure_index()
     chunks = retrieve(query, k=k)
     context = "\n\n---\n\n".join(chunks) if chunks else "(no data found)"
 
