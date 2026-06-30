@@ -5,6 +5,7 @@ Runs the fixed 4-step agent. Extracts the service name from the
 query, so it checks the RIGHT service. Predictable, auditable,
 but rigid — always the same path regardless of query complexity.
 
+Requires: MCP server running (python src/mcp_server.py in another terminal)
 Run: python scripts/week-06/demo-01-fixed-chain.py
 """
 import os, sys
