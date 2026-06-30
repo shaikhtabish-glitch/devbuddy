@@ -41,7 +41,7 @@ dynamic agent builders. It composes everything from Weeks 2–5:
 ```
 agent.py
 ├── from src.llm import get_llm          # Week 1
-├── spawns mcp_server.py as subprocess   # Week 5 — ALL data access via MCP
+├── SSE client → mcp_server.py           # Week 5 — ALL data via MCP
 │   ├── search_docs(query, k)            #   retrieval (Week 3)
 │   ├── get_build_status(service_name)   #   tools (Week 4)
 │   ├── get_recent_deploys(...)          #
@@ -50,13 +50,15 @@ agent.py
 ```
 
 **Single data path.** All data access — retrieval and tools — goes through the
-MCP server. The agent has no direct dependency on `src.rag` or `src.tools`.
-`mcp_server.py` handles indexing at startup, so the agent doesn't need to.
+MCP server over SSE (`http://127.0.0.1:8000/sse`). The agent has no direct
+dependency on `src.rag` or `src.tools`. The MCP server runs as a long-lived
+daemon (start it in another terminal: `python src/mcp_server.py`). Model
+loads once, all calls are instant.
 
 **The import graph is now complete.** Every module built so far feeds into the agent.
 
 ## Files You'll Touch
-- `src/agent.py` — the orchestrator (imports llm, rag, spawns MCP server)
+- `src/agent.py` — the orchestrator (imports llm, connects to MCP over SSE)
 - `scripts/week-06/` — demo scripts
 
 ---
@@ -75,7 +77,7 @@ The moderator runs a demo first (fixed chain: RAG → tool → structured output
 
 - **State:** `AgentState` carries query, service_name, context, build_status, deploys, incidents, report, steps, cost
 - **Nodes:** `extract_service` → `retrieve_context` → `check_build` → `check_deploys` → `check_incidents` → `generate_report`
-- **Tools** are called via MCP (`_call_mcp_tool()`) — spawns the Week 5 server
+- **Tools** are called via MCP (`_call_mcp_tool()`) — connects to the Week 5 server over SSE
 - **Fixed chain:** `build_fixed_chain()` — 4 steps, always the same path
 - **Dynamic agent:** `build_dynamic_agent()` — model decides steps at runtime
 
@@ -196,7 +198,7 @@ python scripts/week-06/demo-03-conversational-agent.py  # talk to DevBuddy
 | `ImportError: langgraph` | `pip install langgraph` |
 | Agent loops infinitely | The guard is already there — `MAX_STEPS=10`, `MAX_COST=$2.00` |
 | Router always picks the same step | Improve the routing prompt. Make decision criteria explicit. |
-| MCP tool call fails | Ensure Qdrant is running (`docker-compose up -d`) and index exists |
+| MCP tool call fails | Ensure MCP server is running (`python src/mcp_server.py`) and Qdrant is up |
 | State not carrying between steps | Check that each node returns the state dict |
 
 ---
