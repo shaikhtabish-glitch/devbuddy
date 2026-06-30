@@ -133,11 +133,31 @@ asyncio.run(main())
 
 ```bash
 python scripts/week-05/demo-01-mcp-client.py
-# → Available tools: ['get_build_status', 'get_recent_deploys', 'get_active_incidents']
-# → Result: {"status": "degraded", "last_deploy": "2026-06-28T06:45:00Z", ...}
+
+  📡 Connected. Server exposes:
+      🏗️  get_build_status — Return the current build/health status...
+      🚀  get_recent_deploys — Return the last N deployments...
+      🚨  get_active_incidents — Return any active (unresolved) incidents...
+
+  ── Querying build status ──
+      auth-service:   HEALTHY
+                      last deploy  2026-06-28T08:15:00Z
+      payment-api:    DEGRADED
+                      last deploy  2026-06-28T06:45:00Z
+
+  ── Recent deployments ──
+      ✅  abc123def456  tabish  2026-06-28T08:15:00Z
+      ✅  def789ghi012  maria   2026-06-28T06:45:00Z
+
+  ── Active incidents ──
+      🚨  INC-842  Sev1  payment-api latency spike. 15% affected.
+
+  All data from the Week 3 RAG index (Qdrant).
+  Same tools as Week 4. Any MCP client can call them.
 ```
 
-**The full path:** client → MCP protocol → server → tool execution → response. Same tools as Week 4, but now over a shared protocol.
+**The story:** Connect → Discover 3 tools → Call them → Get structured results.
+All data comes from the RAG index (Week 3), served over a shared protocol (Week 5).
 
 ---
 
