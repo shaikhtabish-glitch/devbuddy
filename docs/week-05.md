@@ -163,13 +163,12 @@ python -c "
 Add a new tool to the server. Any tool:
 
 ```python
-# In mcp_server.py, add before app.add_tool() calls:
+# In mcp_server.py, add before the entry point:
+@mcp.tool()
 def get_server_time() -> str:
     """Return the current server time."""
     from datetime import datetime
     return datetime.now().isoformat()
-
-app.add_tool(get_server_time)
 ```
 
 Restart the server. Reconnect the client. Does `list_tools()` show your new tool? Call it. Does it work?
@@ -178,20 +177,24 @@ Restart the server. Reconnect the client. Does `list_tools()` show your new tool
 
 ---
 
-### Step 5: Cross-room call (5 min)
+### Step 5: stdio vs production (5 min)
 
-Find a partner. Get their machine's hostname or IP. Start your server on their machine (or yours) and connect from the other:
+Our server uses **stdio** transport — the client spawns `python src/mcp_server.py`
+as a subprocess. This is perfect for local dev, but it has two limitations:
 
-```bash
-# On their machine:
-python src/mcp_server.py
+1. **New process per connection** — no shared state, no connection pooling
+2. **Same machine only** — stdio can't cross the network
 
-# On your machine — connect to their server
-# (stdio won't work cross-machine. For this demo, share screens
-#  or use HTTP transport if your blueprint supports it.)
+In production you'd switch to **HTTP/SSE** transport — the server runs as
+a long-lived daemon on a port, clients connect over the network:
+
+```python
+# Production pattern (not used in this session):
+if __name__ == "__main__":
+    mcp.run(transport="sse", host="0.0.0.0", port=8000)
 ```
 
-**The goal:** prove that any client can call any server. Ecosystem achieved.
+Same tools. Same protocol. Different transport. That's the MCP promise.
 
 ---
 
