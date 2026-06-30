@@ -56,11 +56,18 @@ def _synthesise(instructions: str, query: str, k: int = 5) -> str:
         SystemMessage(content=(
             "You are a data extraction tool. "
             "Only use data present in the provided context. Do not invent information. "
+            "Return ONLY raw JSON — no markdown fences, no backticks, no explanations. "
             f"{instructions}"
         )),
         HumanMessage(content=f"Context:\n{context}")
     ])
-    return response.content
+    # Strip markdown fences if the model added them anyway
+    text = response.content.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+    return text.strip()
 
 
 # ── Tools ─────────────────────────────────────────────────────
