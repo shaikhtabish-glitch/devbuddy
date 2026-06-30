@@ -9,7 +9,10 @@ Run: python scripts/week-06/demo-03-conversational-agent.py
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.agent import run_dynamic_agent
+from src.agent import run_dynamic_agent, _start_mcp_session, _stop_mcp_session
+
+# Start MCP server once — reused across all queries this session
+_start_mcp_session()
 
 print("=" * 70)
 print("  DevBuddy Agent — Conversational Mode")
@@ -59,4 +62,5 @@ while True:
 
 print()
 print(f"  Session ended. {turn} queries, total cost ~${total_cost:.6f}")
+_stop_mcp_session()
 print("=" * 70)

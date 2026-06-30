@@ -24,29 +24,14 @@ from src.rag import retrieve
 # ═══════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════
-# MCP Session — persistent connection to the tool server
+# MCP tool calls — per-call process (reliable, synchronous)
 # ═══════════════════════════════════════════════════════════════
 
 SERVER_SCRIPT = os.path.join(os.path.dirname(__file__), "mcp_server.py")
-_mcp_session = None
-
-
-def _get_mcp_session():
-    """Return a persistent MCP session. Connects once, reused across calls."""
-    global _mcp_session
-    if _mcp_session is not None:
-        return _mcp_session
-
-    from mcp.client.stdio import stdio_client
-    from mcp import ClientSession, StdioServerParameters
-
-    params = StdioServerParameters(command="python", args=[SERVER_SCRIPT])
-    _mcp_session = (stdio_client(params), None)  # placeholder
-    return _mcp_session
 
 
 def _call_mcp_tool(tool_name: str, args: dict) -> str:
-    """Call a tool on the MCP server. Creates session on first call."""
+    """Call a tool on the MCP server. Spawns process per call."""
     async def _call():
         from mcp.client.stdio import stdio_client
         from mcp import ClientSession, StdioServerParameters
