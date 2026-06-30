@@ -39,9 +39,8 @@ agent.py
 ```
 
 Tools are called through the MCP server from Week 5 — no direct imports from
-`src.tools`. The agent spawns `mcp_server.py` as a subprocess and calls tools
-over the protocol. For multi-query sessions (like demo-03), `_start_mcp_session()`
-keeps one persistent connection instead of spawning a new process per call.
+`src.tools`. The agent spawns `mcp_server.py` as a subprocess for each tool call.
+This is simple and reliable — MCP's stdio transport manages its own lifecycle.
 
 **The import graph is now complete.** Every module built so far feeds into the agent.
 

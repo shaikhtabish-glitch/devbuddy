@@ -20,59 +20,16 @@ from src.rag import retrieve
 
 
 # ═══════════════════════════════════════════════════════════════
-# MCP Session — persistent connection, reused across tool calls
+# MCP tool calls — one-shot subprocess per call
 # ═══════════════════════════════════════════════════════════════
+# MCP's stdio transport manages its own task group lifecycle.
+# Each call spawns a fresh subprocess — simple, reliable, correct.
 
 SERVER_SCRIPT = os.path.join(os.path.dirname(__file__), "mcp_server.py")
 
-# Module-level session state — started once, reused for all queries
-_mcp_session = None
-_mcp_read = None
-_mcp_write = None
-
-
-def _start_mcp_session():
-    """Start a persistent MCP session. Call once per application lifetime.
-
-    Subsequent tool calls reuse this session instead of spawning
-    a new Python subprocess per call.
-    """
-    global _mcp_read, _mcp_write, _mcp_session
-
-    async def _start():
-        from mcp.client.stdio import stdio_client
-        from mcp import ClientSession, StdioServerParameters
-        params = StdioServerParameters(command="python", args=[SERVER_SCRIPT])
-        read, write = await stdio_client(params).__aenter__()
-        session = await ClientSession(read, write).__aenter__()
-        await session.initialize()
-        return read, write, session
-
-    _mcp_read, _mcp_write, _mcp_session = asyncio.run(_start())
-
-
-def _stop_mcp_session():
-    """Tear down the persistent MCP session."""
-    global _mcp_read, _mcp_write, _mcp_session
-    if _mcp_session is not None:
-        asyncio.run(_mcp_session.__aexit__(None, None, None))
-        asyncio.run(_mcp_write.__aexit__(None, None, None))
-        _mcp_session = None
-        _mcp_read = None
-        _mcp_write = None
-
 
 def _call_mcp_tool(tool_name: str, args: dict) -> str:
-    """Call a tool on the MCP server.
-
-    Uses the persistent session if _start_mcp_session() was called,
-    otherwise spawns a one-shot subprocess per call.
-    """
-    if _mcp_session is not None:
-        result = asyncio.run(_mcp_session.call_tool(tool_name, args))
-        return result.content[0].text if result.content else "no result"
-
-    # Fallback: one-shot subprocess
+    """Call a tool on the MCP server. Spawns a one-shot subprocess."""
     async def _call():
         from mcp.client.stdio import stdio_client
         from mcp import ClientSession, StdioServerParameters
