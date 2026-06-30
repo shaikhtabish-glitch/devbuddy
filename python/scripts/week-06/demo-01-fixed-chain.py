@@ -1,8 +1,9 @@
 """
-Demo 1: Fixed Chain — retrieve → build → report
+Demo 1: Fixed Chain — extract → retrieve → build → report
 
-Runs the fixed 3-step agent. Predictable, auditable, but
-always checks payment-api regardless of the query.
+Runs the fixed 4-step agent. Extracts the service name from the
+query, so it checks the RIGHT service. Predictable, auditable,
+but rigid — always the same path regardless of query complexity.
 
 Run: python scripts/week-06/demo-01-fixed-chain.py
 """
@@ -12,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from src.agent import run_fixed_chain
 
 print("=" * 70)
-print("  Demo 1: Fixed Chain — Retrieve → Build → Report")
+print("  Demo 1: Fixed Chain — Extract → Retrieve → Build → Report")
 print("=" * 70)
 print()
 
@@ -32,11 +33,7 @@ for query in queries:
     print()
 
 print("=" * 70)
-print("  Fixed chain: extract service → retrieve → build → report")
-print("  4 steps every time. Predictable path. But the tools still")
-print("  use the extracted service name — so Query 1 and Query 2")
-print("  both check the RIGHT service now. The chain is correct")
-print("  but still rigid. Add a new tool and the chain can't use it.")
-print()
-print("  Dynamic agent has the same 4 steps but can add more.")
+print("  Fixed chain: 4 steps every time. Predictable, auditable,")
+print("  but rigid. The dynamic agent can adapt — run demo-02 to")
+print("  see it add deploys and incidents checks when needed.")
 print("=" * 70)

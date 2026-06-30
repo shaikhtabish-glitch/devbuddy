@@ -9,7 +9,7 @@ Run: python scripts/week-06/demo-02-dynamic-routing.py
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.agent import run_dynamic_agent, run_fixed_chain
+from src.agent import run_dynamic_agent
 
 print("=" * 70)
 print("  Demo 2: Dynamic Routing — Model Decides the Steps")
@@ -33,16 +33,13 @@ for query in queries:
     print()
 
 print("=" * 70)
-print("  Q1 (health only)      → retrieve + build + report")
-print("  Q2 (deploys+incidents) → retrieve + deploys + incidents + report")
-print("  Q3 (full assessment)   → all 4 data steps + report")
+print("  Q1 (health only)       → retrieve + build + report")
+print("  Q2 (deploys + incidents) → retrieve + deploys + incidents + report")
+print("  Q3 (full assessment)    → all 4 data steps + report")
 print()
-print("  Fixed chain:   3 steps every time, ~$0.00017")
-print("  Dynamic agent: 5 steps (4 data + report), ~$0.00033")
-print()
-print("  Dynamic costs ~2x more but adapts to ANY query.")
-print("  Fixed costs less but silently corrupts data for")
-print("  queries about different services.")
+print("  Dynamic agent adapts — more steps = higher cost but")
+print("  greater correctness. Fixed chain (demo-01) is cheaper")
+print("  but always runs the same path regardless of query.")
 print()
 print("  The tradeoff: cost vs correctness.")
 print("=" * 70)
