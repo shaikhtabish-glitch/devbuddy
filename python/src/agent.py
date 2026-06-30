@@ -11,6 +11,7 @@ Imports:
   MCP subprocess for all data access
 """
 import os, sys, json, asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import TypedDict
 
 from langgraph.graph import StateGraph, END
@@ -58,11 +59,24 @@ _mcp_session = None
 
 
 def _call_mcp_tool(tool_name: str, args: dict) -> str:
-    """Call a tool on the MCP server using the active session."""
+    """Call a tool on the MCP server using the active session.
+
+    Uses a separate thread when called from inside an event loop
+    (e.g., during _run_agent_with_mcp_session). Falls back to
+    asyncio.run() when no event loop is running.
+    """
     async def _call():
         result = await _mcp_session.call_tool(tool_name, args)
         return result.content[0].text if result.content else "no result"
-    return asyncio.run(_call())
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(_call())  # no event loop
+    else:
+        # Inside an event loop — run in a fresh thread
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, _call()).result()
 
 
 # ═══════════════════════════════════════════════════════════════
