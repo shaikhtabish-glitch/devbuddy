@@ -34,7 +34,11 @@ mcp = FastMCP(
 
 try:
     count = index_documents()
-    print(f"RAG index ready: {count} chunks indexed", file=sys.stderr)
+    # Only log if we actually built the index (first time)
+    if count > 0:
+        print(f"RAG index built: {count} chunks indexed", file=sys.stderr)
+    else:
+        print("RAG index already exists — reusing", file=sys.stderr)
 except Exception as e:
     print(f"WARNING: Could not index documents — {e}", file=sys.stderr)
     print("Make sure Qdrant is running: docker-compose up -d", file=sys.stderr)

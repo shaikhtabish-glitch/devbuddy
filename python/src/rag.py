@@ -88,8 +88,7 @@ def index_documents(
     client = QdrantClient(url=QDRANT_URL)
     existing = {c.name for c in client.get_collections().collections}
     if QDRANT_COLLECTION in existing:
-        # Reuse existing index — no need to re-embed
-        return len(chunks)
+        return 0  # already indexed — nothing to do
 
     # Get embedding dimension from the model
     test_vec = emb.embed_query("test")
