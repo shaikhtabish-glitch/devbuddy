@@ -159,4 +159,6 @@ def search_docs(query: str, k: int = 3) -> str:
 # ── Entry point ───────────────────────────────────────────────
 
 if __name__ == "__main__":
-    mcp.run()
+    # SSE transport — long-lived daemon. Model loads once, all
+    # clients share it. No per-call subprocess spawning penalty.
+    mcp.run(transport="sse")
