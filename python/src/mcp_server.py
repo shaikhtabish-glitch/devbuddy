@@ -161,4 +161,4 @@ def search_docs(query: str, k: int = 3) -> str:
 if __name__ == "__main__":
     # SSE transport — long-lived daemon. Model loads once, all
     # clients share it. No per-call subprocess spawning penalty.
-    mcp.run(transport="sse")
+    mcp.run(transport="sse", host="127.0.0.1", port=8765)

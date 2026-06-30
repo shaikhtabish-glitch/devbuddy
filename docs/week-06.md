@@ -15,7 +15,7 @@ pip install -r requirements.txt   # langgraph>=0.2.0 should be installed
 # Terminal 1: Start the MCP server (SSE — model loads once, reused for all calls)
 python src/mcp_server.py
 # → RAG index built: 19 chunks indexed
-# → Server listening on http://localhost:8000
+# → Server listening on http://localhost:8765
 
 # Terminal 2: Qdrant must be running
 docker-compose up -d

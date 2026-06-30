@@ -25,7 +25,7 @@ from src.llm import get_llm
 # The MCP server runs as a daemon (python src/mcp_server.py).
 # Model loads once. All tool calls reuse the same process.
 
-MCP_URL = "http://localhost:8000/sse"
+MCP_URL = "http://localhost:8765/sse"
 
 
 def _call_mcp_tool(tool_name: str, args: dict) -> str:
