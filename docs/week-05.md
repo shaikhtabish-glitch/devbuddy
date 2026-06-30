@@ -94,9 +94,14 @@ synthesises a JSON result with the LLM. Same RAG pipeline, new consumer.
 Start it:
 
 ```bash
+# Qdrant must be running first: docker-compose up -d
 python src/mcp_server.py
+# → RAG index ready: 19 chunks indexed
 # → Server running on stdio. Waiting for client connections...
 ```
+
+The server indexes documents from `shared/data/` once at startup, then serves
+tools that query that index. No mock data. No repeated indexing.
 
 ---
 

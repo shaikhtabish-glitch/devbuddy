@@ -8,14 +8,14 @@ Week 3 now powers tool results in Week 5. One data source, many consumers.
 
 Write once. Any MCP client in any language can discover and call these tools.
 
-Imports: from src.rag import retrieve
+Imports: from src.rag import retrieve, index_documents
          from src.llm import get_llm
 """
 import os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mcp.server.fastmcp import FastMCP
-from src.rag import retrieve
+from src.rag import retrieve, index_documents
 from src.llm import get_llm
 
 mcp = FastMCP(
@@ -26,6 +26,16 @@ mcp = FastMCP(
         "All data comes from the Week 3 RAG index (Qdrant)."
     ),
 )
+
+
+# ── Startup: ensure the RAG index exists before serving tools ──
+
+try:
+    count = index_documents()
+    print(f"RAG index ready: {count} chunks indexed", file=sys.stderr)
+except Exception as e:
+    print(f"WARNING: Could not index documents — {e}", file=sys.stderr)
+    print("Make sure Qdrant is running: docker-compose up -d", file=sys.stderr)
 
 
 # ── Helper: retrieve + synthesise ─────────────────────────────
