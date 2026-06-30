@@ -20,25 +20,48 @@ from src.llm import get_llm
 
 
 # ═══════════════════════════════════════════════════════════════
-# MCP tool calls — one-shot subprocess per call
+# MCP tool calls — persistent session per query
 # ═══════════════════════════════════════════════════════════════
-# MCP's stdio transport manages its own task group lifecycle.
-# Each call spawns a fresh subprocess — simple, reliable, correct.
+# The MCP server loads SentenceTransformer on startup (~5s).
+# We keep one session alive for the duration of a query to avoid
+# paying that cost per tool call.
 
 SERVER_SCRIPT = os.path.join(os.path.dirname(__file__), "mcp_server.py")
 
 
-def _call_mcp_tool(tool_name: str, args: dict) -> str:
-    """Call a tool on the MCP server. Spawns a one-shot subprocess."""
-    async def _call():
+def _run_agent_with_mcp_session(agent, initial_state: dict) -> dict:
+    """Run the agent graph inside a single MCP session.
+
+    The MCP server is spawned once, all tool calls reuse the same
+    process, and the session is torn down when the graph completes.
+    """
+    async def _run():
         from mcp.client.stdio import stdio_client
         from mcp import ClientSession, StdioServerParameters
         params = StdioServerParameters(command="python", args=[SERVER_SCRIPT])
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                result = await session.call_tool(tool_name, args)
-                return result.content[0].text if result.content else "no result"
+                # Inject session into the module for nodes to use
+                global _mcp_session
+                _mcp_session = session
+                try:
+                    return agent.invoke(initial_state)
+                finally:
+                    _mcp_session = None
+    return asyncio.run(_run())
+
+
+# Module-level session — set by _run_agent_with_mcp_session,
+# used by _call_mcp_tool in each node
+_mcp_session = None
+
+
+def _call_mcp_tool(tool_name: str, args: dict) -> str:
+    """Call a tool on the MCP server using the active session."""
+    async def _call():
+        result = await _mcp_session.call_tool(tool_name, args)
+        return result.content[0].text if result.content else "no result"
     return asyncio.run(_call())
 
 
@@ -336,18 +359,12 @@ def _init_state(query: str) -> dict:
 
 
 def run_fixed_chain(query: str) -> dict:
-    """Run the fixed 3-step chain and return the result.
-
-    Assumes the RAG index already exists (run index_documents() from Week 3 first).
-    """
+    """Run the fixed 3-step chain inside a single MCP session."""
     agent = build_fixed_chain()
-    return agent.invoke(_init_state(query))
+    return _run_agent_with_mcp_session(agent, _init_state(query))
 
 
 def run_dynamic_agent(query: str) -> dict:
-    """Run the dynamic agent and return the result with routing trace.
-
-    Assumes the RAG index already exists (run index_documents() from Week 3 first).
-    """
+    """Run the dynamic agent inside a single MCP session."""
     agent = build_dynamic_agent()
-    return agent.invoke(_init_state(query))
+    return _run_agent_with_mcp_session(agent, _init_state(query))
