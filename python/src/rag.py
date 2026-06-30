@@ -84,12 +84,18 @@ def index_documents(
 
     emb = _get_embeddings()
 
-    # Connect to Qdrant — skip if collection already has data
+    # Connect to Qdrant — reuse if collection already has data
     client = QdrantClient(url=QDRANT_URL)
     try:
         info = client.get_collection(QDRANT_COLLECTION)
         if info.points_count and info.points_count > 0:
-            return 0  # already indexed with data — nothing to do
+            # Already indexed — just reconnect to existing collection
+            _vectorstore = QdrantVectorStore(
+                client=client,
+                collection_name=QDRANT_COLLECTION,
+                embedding=emb,
+            )
+            return 0  # nothing new to index
         client.delete_collection(QDRANT_COLLECTION)
     except Exception:
         pass  # collection doesn't exist yet
