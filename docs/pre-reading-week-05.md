@@ -66,6 +66,12 @@ Start with read-only tools. Add write tools only after auth and audit are in pla
 
 ---
 
+## Further Reading
+
+- [MCP Documentation — Getting Started](https://modelcontextprotocol.io/docs/getting-started/intro) — official docs: architecture, transports, tool discovery, examples.
+
+---
+
 ## One Question to Hold
 
 If your org had a single MCP server exposing build status, deployments, incidents, and docs, every team's DevBuddy would be 10x more capable. Which tool would you register first?

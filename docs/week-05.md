@@ -27,11 +27,10 @@ python -m pytest tests/test_tools.py -v -k "not run_tool_loop"
 
 ## What You Have
 
-Open `src/mcp_server.py`. It's a stub. By the end of this session, it will:
-
-- Start an MCP server that exposes tools from `src/tools.py`
-- Accept client connections over stdio transport
-- Let any MCP client discover and call `get_build_status`, `get_recent_deploys`, `get_active_incidents`
+Open `src/mcp_server.py`. It uses FastMCP to expose 3 tools — but here's what's
+different from Week 4: these tools don't use hardcoded mock data. They query the
+**Week 3 RAG index** (Qdrant) and synthesise results with the LLM. One data source,
+many consumers. By the end of this session, you'll understand why that matters.
 
 ## The Architecture
 
@@ -51,8 +50,9 @@ Open `src/mcp_server.py`. It's a stub. By the end of this session, it will:
 **Write once. Consume anywhere.** Python, Node.js, Java — any MCP client can use your tools.
 
 ## Files You'll Touch
-- `src/mcp_server.py` — the MCP server (imports `src.tools`)
-- `src/tools.py` — already built (3 tools with mock data)
+- `src/mcp_server.py` — the MCP server (imports `src.rag` for RAG data, `src.llm` for synthesis)
+- `src/rag.py` — already built (Week 3 vector store — tools query it directly)
+- `src/llm.py` — already built (Week 1 OpenRouter client)
 - `scripts/week-05/` — demo scripts
 
 ---
@@ -63,39 +63,45 @@ The moderator runs a demo first (stand up server + connect client). Watch, then 
 
 ---
 
-### Step 1: Stand up the MCP server (10 min)
+### Step 1: Study the MCP server (10 min)
 
-`src/mcp_server.py` is a stub. The server wraps your existing tools and exposes them over MCP:
+Open `src/mcp_server.py`. Walk through the architecture:
 
 ```python
-# src/mcp_server.py
-import asyncio
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
+from mcp.server.fastmcp import FastMCP
+from src.rag import retrieve, index_documents   # Week 3 RAG
+from src.llm import get_llm                      # Week 1 client
 
-from src.tools import get_build_status, get_recent_deploys, get_active_incidents
+mcp = FastMCP("devbuddy-mcp")
 
-app = Server("devbuddy-mcp")
+# Shared helper — every tool follows this pattern
+def _synthesise(instructions, query, k=5):
+    chunks = retrieve(query, k=k)       # ← hits Qdrant, not hardcoded dicts
+    # feed chunks to LLM → returns JSON
 
-# Register tools from src/tools.py
-app.add_tool(get_build_status)
-app.add_tool(get_recent_deploys)
-app.add_tool(get_active_incidents)
-
-async def main():
-    async with stdio_server() as (read_stream, write_stream):
-        await app.run(read_stream, write_stream, app.create_initialization_options())
-
-if __name__ == "__main__":
-    asyncio.run(main())
+@mcp.tool()
+def get_build_status(service_name: str) -> str:
+    return _synthesise(
+        "Extract the current build/health status...",
+        f"{service_name} build status health check deploy",
+    )
 ```
+
+**Key insight:** The `@mcp.tool()` decorator registers the function with FastMCP.
+Under the hood, each tool retrieves chunks from the Week 3 Qdrant index and
+synthesises a JSON result with the LLM. Same RAG pipeline, new consumer.
 
 Start it:
 
 ```bash
+# Qdrant must be running first: docker-compose up -d
 python src/mcp_server.py
+# → RAG index ready: 19 chunks indexed
 # → Server running on stdio. Waiting for client connections...
 ```
+
+The server indexes documents from `shared/data/` once at startup, then serves
+tools that query that index. No mock data. No repeated indexing.
 
 ---
 
@@ -127,11 +133,41 @@ asyncio.run(main())
 
 ```bash
 python scripts/week-05/demo-01-mcp-client.py
-# → Available tools: ['get_build_status', 'get_recent_deploys', 'get_active_incidents']
-# → Result: {"status": "degraded", "last_deploy": "2026-06-28T06:45:00Z", ...}
+
+  📡  DISCOVER: list_tools()
+      🏗️  get_build_status
+          Return the current build/health status for a given service.
+      🚀  get_recent_deploys
+          Return the last N deployments for a given service.
+      🚨  get_active_incidents
+          Return any active (unresolved) incidents for a given service.
+
+  ───────────────────────────────────────────────────────────
+  🏗️  QUERY: get_build_status
+  ───────────────────────────────────────────────────────────
+      →  RESPONSE  auth-service:  HEALTHY
+                     last deploy  2026-06-28T08:15:00Z
+      →  RESPONSE  payment-api:   DEGRADED
+                     last deploy  2026-06-28T06:45:00Z
+
+  ───────────────────────────────────────────────────────────
+  🚀  QUERY: get_recent_deploys(payment-api, limit=2)
+  ───────────────────────────────────────────────────────────
+      →  ✅  abc123def456  tabish   2026-06-28T08:15:00Z
+      →  ✅  def789ghi012  maria    2026-06-28T06:45:00Z
+
+  ───────────────────────────────────────────────────────────
+  🚨  QUERY: get_active_incidents(payment-api)
+  ───────────────────────────────────────────────────────────
+      →  Sev1    INC-842
+                  payment-api latency spike. 15% affected.
+
+  All data from the Week 3 RAG index (Qdrant).
+  Same tools as Week 4. Any MCP client can call them.
 ```
 
-**The full path:** client → MCP protocol → server → tool execution → response. Same tools as Week 4, but now over a shared protocol.
+**The story:** DISCOVER → QUERY → RESPONSE. The MCP protocol in action.
+All data from the RAG index (Week 3), served over a shared protocol (Week 5).
 
 ---
 
@@ -162,13 +198,12 @@ python -c "
 Add a new tool to the server. Any tool:
 
 ```python
-# In mcp_server.py, add before app.add_tool() calls:
+# In mcp_server.py, add before the entry point:
+@mcp.tool()
 def get_server_time() -> str:
     """Return the current server time."""
     from datetime import datetime
     return datetime.now().isoformat()
-
-app.add_tool(get_server_time)
 ```
 
 Restart the server. Reconnect the client. Does `list_tools()` show your new tool? Call it. Does it work?
@@ -177,20 +212,24 @@ Restart the server. Reconnect the client. Does `list_tools()` show your new tool
 
 ---
 
-### Step 5: Cross-room call (5 min)
+### Step 5: stdio vs production (5 min)
 
-Find a partner. Get their machine's hostname or IP. Start your server on their machine (or yours) and connect from the other:
+Our server uses **stdio** transport — the client spawns `python src/mcp_server.py`
+as a subprocess. This is perfect for local dev, but it has two limitations:
 
-```bash
-# On their machine:
-python src/mcp_server.py
+1. **New process per connection** — no shared state, no connection pooling
+2. **Same machine only** — stdio can't cross the network
 
-# On your machine — connect to their server
-# (stdio won't work cross-machine. For this demo, share screens
-#  or use HTTP transport if your blueprint supports it.)
+In production you'd switch to **HTTP/SSE** transport — the server runs as
+a long-lived daemon on a port, clients connect over the network:
+
+```python
+# Production pattern (not used in this session):
+if __name__ == "__main__":
+    mcp.run(transport="sse", host="0.0.0.0", port=8000)
 ```
 
-**The goal:** prove that any client can call any server. Ecosystem achieved.
+Same tools. Same protocol. Different transport. That's the MCP promise.
 
 ---
 

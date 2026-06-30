@@ -1,21 +1,32 @@
 """
-Demo 2: MCP Tools + LLM — model calls tools via MCP
+Demo 2: MCP Tools + LLM — model decides, MCP executes
 
-Connects to the MCP server, discovers tools, describes them to the LLM,
-and the LLM decides which tools to call. Tool execution goes through
-the MCP session.
+Connects to the MCP server, discovers tools, and lets the LLM decide
+which tools to call at runtime. The LLM produces structured tool-call
+decisions (Week 2 pattern), and the MCP session executes them.
+
+This is the same decide → execute → return loop from Week 4, but the
+tools are discovered dynamically from the MCP server — not hardcoded.
 
 Run: python scripts/week-05/demo-02-mcp-with-llm.py
 """
 import asyncio, os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
+from pydantic import BaseModel, Field
 from mcp.client.stdio import stdio_client
 from mcp import ClientSession, StdioServerParameters
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from src.llm import get_llm
 
 SERVER_SCRIPT = os.path.join(os.path.dirname(__file__), "..", "..", "src", "mcp_server.py")
+
+
+class MCPToolDecision(BaseModel):
+    """The LLM's decision about which MCP tools to call. Week 2 pattern."""
+    tool_calls: list[dict] = Field(
+        description="List of tool calls. Each has 'tool' (name) and 'args' (dict of arguments)."
+    )
 
 
 async def main():
@@ -28,7 +39,7 @@ async def main():
             tools = (await session.list_tools()).tools
 
             print("=" * 70)
-            print("  Demo 2: MCP Tools + LLM — Model Calls Tools via MCP")
+            print("  Demo 2: MCP Tools + LLM — Decide → Execute → Return")
             print("=" * 70)
             print()
             print(f"  Discovered {len(tools)} tools from MCP server:")
@@ -38,58 +49,52 @@ async def main():
 
             # Build tool descriptions for the system prompt
             tool_descriptions = "\n".join(
-                f"- {t.name}: {t.description.strip()}" for t in tools
+                f"- {t.name}({t.inputSchema.get('properties', {})}): {t.description.strip()}"
+                for t in tools
             )
 
             question = "Is the payment-api healthy and what were its last 2 deployments?"
             print(f"  Query: {question}")
             print()
 
-            # Step 1: Ask LLM which tool(s) to call
+            # ── Step 1: LLM decides which tools to call ──────────
+            # Uses with_structured_output() — the Week 2 pattern.
+            # Safer than json.loads() with markdown hacks.
             llm = get_llm(temperature=0)
-            plan_response = llm.invoke([
+            decision_llm = llm.with_structured_output(MCPToolDecision)
+
+            decision = decision_llm.invoke([
                 SystemMessage(content=(
                     "You are an engineering assistant. You have access to these tools:\n\n"
                     f"{tool_descriptions}\n\n"
-                    "When asked a question, respond with a JSON array of tool calls to make. "
-                    "Each tool call must have 'tool' (the name) and 'args' (a dict of arguments). "
-                    "Only respond with the JSON array, nothing else.\n\n"
-                    "Example: [{\"tool\": \"get_build_status\", \"args\": {\"service_name\": \"auth-service\"}}]"
+                    "Decide which tools to call and with what arguments. "
+                    "Include ALL tools needed to answer the question. "
+                    "Use the exact tool names listed above."
                 )),
                 HumanMessage(content=question),
             ])
 
-            plan_text = plan_response.content.strip()
-            # Extract JSON from response
-            if "```" in plan_text:
-                plan_text = plan_text.split("```")[1]
-                if plan_text.startswith("json"):
-                    plan_text = plan_text[4:]
-            tool_calls = json.loads(plan_text)
-
-            print(f"  LLM decided to call: {json.dumps(tool_calls, indent=2)}")
+            print(f"  LLM decided: {json.dumps(decision.tool_calls, indent=2)}")
             print()
 
-            # Step 2: Execute each tool call via MCP session
+            # ── Step 2: Execute via MCP session ──────────────────
             results = []
-            for tc in tool_calls:
+            for tc in decision.tool_calls:
                 tool_name = tc["tool"]
                 args = tc["args"]
                 result = await session.call_tool(tool_name, args)
                 result_text = result.content[0].text if result.content else "no result"
-                results.append({"tool": tool_name, "args": args, "result": json.loads(result_text)})
+                results.append({"tool": tool_name, "args": args, "result": result_text})
                 print(f"  → {tool_name}({args})")
-                print(f"  ← {json.dumps(json.loads(result_text), indent=2)[:200]}")
-
+                print(f"  ← {result_text[:200]}...")
             print()
 
-            # Step 3: Ask LLM for final answer using the tool results
+            # ── Step 3: LLM produces final answer ─────────────────
             context = json.dumps(results, indent=2)
             final_response = llm.invoke([
                 SystemMessage(content=(
-                    "You are an engineering assistant. The user asked a question. "
-                    "Here are the results from the tools you called. Answer the user's "
-                    "question based on this data.\n\n"
+                    "You are an engineering assistant. Answer the user's question "
+                    "using the tool results below. Be concise and accurate.\n\n"
                     f"Tool results:\n{context}"
                 )),
                 HumanMessage(content=question),
@@ -98,8 +103,8 @@ async def main():
             print(f"  Answer: {final_response.content}")
             print()
             print("=" * 70)
-            print("  The full path: Query → LLM plans → MCP executes →")
-            print("  Results → LLM answers. No tool binding needed.")
+            print("  Decide → Execute → Return — same loop as Week 4.")
+            print("  Tools discovered dynamically via MCP, not hardcoded.")
             print("=" * 70)
 
 
