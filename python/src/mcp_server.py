@@ -15,7 +15,7 @@ import os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mcp.server.fastmcp import FastMCP
-from src.rag import retrieve, index_documents
+from src.rag import retrieve
 from src.llm import get_llm
 
 mcp = FastMCP(
@@ -28,23 +28,14 @@ mcp = FastMCP(
 )
 
 
-# ── Lazy init: index once, reuse across all tool calls ────────
-
-_indexed = False
-
-def _ensure_index():
-    """Index documents once. Subsequent calls are no-ops."""
-    global _indexed
-    if not _indexed:
-        index_documents()
-        _indexed = True
-
-
 # ── Helper: retrieve + synthesise ─────────────────────────────
 
 def _synthesise(instructions: str, query: str, k: int = 5) -> str:
-    """Retrieve relevant chunks from the RAG index and synthesise JSON with the LLM."""
-    _ensure_index()
+    """Retrieve relevant chunks from the RAG index and synthesise JSON with the LLM.
+
+    Assumes documents have already been indexed (Week 3). If the index doesn't
+    exist, retrieve() raises a clear RuntimeError — index first, then use tools.
+    """
     chunks = retrieve(query, k=k)
     context = "\n\n---\n\n".join(chunks) if chunks else "(no data found)"
 
