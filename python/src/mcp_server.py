@@ -60,18 +60,25 @@ def _synthesise(instructions: str, query: str, k: int = 5) -> str:
         SystemMessage(content=(
             "You are a data extraction tool. "
             "Only use data present in the provided context. Do not invent information. "
-            "Return ONLY raw JSON — no markdown fences, no backticks, no explanations. "
+            "Return ONLY valid JSON (object or array) — no markdown, no prose.\n\n"
+            "If no relevant data is found in the context, return a JSON object "
+            "with 'status': 'unknown' and 'reason': 'no matching data found'.\n\n"
             f"{instructions}"
         )),
         HumanMessage(content=f"Context:\n{context}")
     ])
-    # Strip markdown fences if the model added them anyway
     text = response.content.strip()
+    # Strip markdown fences
     if text.startswith("```"):
         text = text.split("\n", 1)[1] if "\n" in text else text[3:]
         if text.endswith("```"):
-            text = text[:-3]
-    return text.strip()
+            text = text[:-3].strip()
+    # Validate — fallback to structured unknown if not valid JSON
+    try:
+        json.loads(text)
+        return text
+    except (json.JSONDecodeError, ValueError):
+        return json.dumps({"status": "unknown", "reason": "could not parse tool result"})
 
 
 # ── Tools ─────────────────────────────────────────────────────
@@ -143,10 +150,10 @@ def get_active_incidents(service_name: str) -> str:
 @mcp.tool()
 def search_docs(query: str, k: int = 3) -> str:
     """Search the documentation index for relevant context.
-    Returns the top-k most relevant document chunks as a JSON array of strings.
+    Returns a JSON object with 'chunks' (array of strings) and 'found' (bool).
     Use this to find documentation, setup guides, API specs, or any written knowledge."""
     chunks = retrieve(query, k=k)
-    return json.dumps(chunks, indent=2)
+    return json.dumps({"chunks": chunks, "found": len(chunks) > 0})
 
 
 # ── Entry point ───────────────────────────────────────────────

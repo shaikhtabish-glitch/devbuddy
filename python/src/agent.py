@@ -94,10 +94,11 @@ def retrieve_context(state: AgentState) -> AgentState:
     """Retrieve relevant documents via MCP search_docs tool."""
     result = _call_mcp_tool("search_docs", {"query": state["query"], "k": 3})
     try:
-        chunks = json.loads(result)
-        state["context"] = "\n\n---\n\n".join(chunks)
+        data = json.loads(result)
+        chunks = data.get("chunks", [])
+        state["context"] = "\n\n---\n\n".join(chunks) if chunks else "(no relevant documents found)"
     except json.JSONDecodeError:
-        state["context"] = result
+        state["context"] = "(search_docs returned invalid response)"
     state["steps"] += 1
     return state
 
