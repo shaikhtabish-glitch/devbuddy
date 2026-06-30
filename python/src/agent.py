@@ -11,7 +11,6 @@ Imports:
   MCP subprocess for all data access
 """
 import os, sys, json, asyncio
-from concurrent.futures import ThreadPoolExecutor
 from typing import TypedDict
 
 from langgraph.graph import StateGraph, END
@@ -21,62 +20,27 @@ from src.llm import get_llm
 
 
 # ═══════════════════════════════════════════════════════════════
-# MCP tool calls — persistent session per query
+# MCP tool calls — one-shot subprocess per call
 # ═══════════════════════════════════════════════════════════════
-# The MCP server loads SentenceTransformer on startup (~5s).
-# We keep one session alive for the duration of a query to avoid
-# paying that cost per tool call.
+# Simple and reliable. Each tool call spawns a fresh MCP server
+# process. The tradeoff is speed (~5s per call for model load)
+# but zero complexity — no async bridging, no thread pools.
 
 SERVER_SCRIPT = os.path.join(os.path.dirname(__file__), "mcp_server.py")
 
 
-def _run_agent_with_mcp_session(agent, initial_state: dict) -> dict:
-    """Run the agent graph inside a single MCP session.
-
-    The MCP server is spawned once, all tool calls reuse the same
-    process, and the session is torn down when the graph completes.
-    """
-    async def _run():
+def _call_mcp_tool(tool_name: str, args: dict) -> str:
+    """Call a tool on the MCP server. Spawns a one-shot subprocess."""
+    async def _call():
         from mcp.client.stdio import stdio_client
         from mcp import ClientSession, StdioServerParameters
         params = StdioServerParameters(command="python", args=[SERVER_SCRIPT])
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                # Inject session into the module for nodes to use
-                global _mcp_session
-                _mcp_session = session
-                try:
-                    return agent.invoke(initial_state)
-                finally:
-                    _mcp_session = None
-    return asyncio.run(_run())
-
-
-# Module-level session — set by _run_agent_with_mcp_session,
-# used by _call_mcp_tool in each node
-_mcp_session = None
-
-
-def _call_mcp_tool(tool_name: str, args: dict) -> str:
-    """Call a tool on the MCP server using the active session.
-
-    Uses a separate thread when called from inside an event loop
-    (e.g., during _run_agent_with_mcp_session). Falls back to
-    asyncio.run() when no event loop is running.
-    """
-    async def _call():
-        result = await _mcp_session.call_tool(tool_name, args)
-        return result.content[0].text if result.content else "no result"
-
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(_call())  # no event loop
-    else:
-        # Inside an event loop — run in a fresh thread
-        with ThreadPoolExecutor(max_workers=1) as pool:
-            return pool.submit(asyncio.run, _call()).result()
+                result = await session.call_tool(tool_name, args)
+                return result.content[0].text if result.content else "no result"
+    return asyncio.run(_call())
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -373,12 +337,12 @@ def _init_state(query: str) -> dict:
 
 
 def run_fixed_chain(query: str) -> dict:
-    """Run the fixed 3-step chain inside a single MCP session."""
+    """Run the fixed 3-step chain. Each tool call spawns a fresh MCP server."""
     agent = build_fixed_chain()
-    return _run_agent_with_mcp_session(agent, _init_state(query))
+    return agent.invoke(_init_state(query))
 
 
 def run_dynamic_agent(query: str) -> dict:
-    """Run the dynamic agent inside a single MCP session."""
+    """Run the dynamic agent. Each tool call spawns a fresh MCP server."""
     agent = build_dynamic_agent()
-    return _run_agent_with_mcp_session(agent, _init_state(query))
+    return agent.invoke(_init_state(query))
