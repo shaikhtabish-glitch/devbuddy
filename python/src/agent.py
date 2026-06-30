@@ -20,20 +20,22 @@ from src.llm import get_llm
 
 
 # ═══════════════════════════════════════════════════════════════
-# MCP tool calls — SSE client to long-lived server
+# MCP tool calls — one-shot subprocess per call
 # ═══════════════════════════════════════════════════════════════
-# The MCP server runs as a daemon (python src/mcp_server.py).
-# Model loads once. All tool calls reuse the same process.
+# Each call spawns a fresh MCP server process. Tradeoff: ~5s
+# startup (SentenceTransformer load) but zero config, no port
+# conflicts, works everywhere.
 
-MCP_URL = "http://localhost:8765/sse"
+SERVER_SCRIPT = os.path.join(os.path.dirname(__file__), "mcp_server.py")
 
 
 def _call_mcp_tool(tool_name: str, args: dict) -> str:
-    """Call a tool on the MCP server over SSE."""
+    """Call a tool on the MCP server via one-shot subprocess."""
     async def _call():
-        from mcp.client.sse import sse_client
-        from mcp import ClientSession
-        async with sse_client(MCP_URL) as (read, write):
+        from mcp.client.stdio import stdio_client
+        from mcp import ClientSession, StdioServerParameters
+        params = StdioServerParameters(command="python", args=[SERVER_SCRIPT])
+        async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
                 result = await session.call_tool(tool_name, args)
