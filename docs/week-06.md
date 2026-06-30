@@ -26,21 +26,27 @@ python -m pytest tests/ -v -k "not analyze_pr and not run_tool_loop"
 
 ## What You Have
 
-Open `src/agent.py`. It's a stub. By the end of this session, it will compose everything from Weeks 2–5:
+Open `src/agent.py`. It's already fully built — 6 nodes, a dynamic router with
+anti-cascade logic, cost tracking, a step/cost guard, and both fixed-chain and
+dynamic agent builders. It composes everything from Weeks 2–5:
 
 ```
 agent.py
 ├── from src.llm import get_llm          # Week 1
-├── from src.schemas import ...          # Week 2 (ServiceReadinessReport)
 ├── from src.rag import retrieve         # Week 3 (RAG)
-├── from src.tools import ...            # Week 4 (tools)
+├── MCP session (spawns mcp_server.py)   # Week 5 (tools via MCP)
 └── LangGraph StateGraph                 # orchestrator
 ```
+
+Tools are called through the MCP server from Week 5 — no direct imports from
+`src.tools`. The agent spawns `mcp_server.py` as a subprocess and calls tools
+over the protocol. For multi-query sessions (like demo-03), `_start_mcp_session()`
+keeps one persistent connection instead of spawning a new process per call.
 
 **The import graph is now complete.** Every module built so far feeds into the agent.
 
 ## Files You'll Touch
-- `src/agent.py` — the orchestrator (imports llm, schemas, rag, tools)
+- `src/agent.py` — the orchestrator (imports llm, rag, spawns MCP server)
 - `scripts/week-06/` — demo scripts
 
 ---
@@ -53,150 +59,74 @@ The moderator runs a demo first (fixed chain: RAG → tool → structured output
 
 ---
 
-### Step 1: Build a fixed chain (15 min)
+### Step 1: Study and run the fixed chain (15 min)
 
-`src/agent.py` is a stub. Build a 3-step chain using LangGraph:
+`src/agent.py` is already built. Open it and study the architecture:
 
-```python
-# src/agent.py
-from typing import TypedDict
-from langgraph.graph import StateGraph, END
-from langchain_core.messages import HumanMessage, SystemMessage
-from src.llm import get_llm
-from src.rag import retrieve
-from src.tools import get_build_status
+- **State:** `AgentState` carries query, service_name, context, build_status, deploys, incidents, report, steps, cost
+- **Nodes:** `extract_service` → `retrieve_context` → `check_build` → `check_deploys` → `check_incidents` → `generate_report`
+- **Tools** are called via MCP (`_call_mcp_tool()`) — spawns the Week 5 server
+- **Fixed chain:** `build_fixed_chain()` — 4 steps, always the same path
+- **Dynamic agent:** `build_dynamic_agent()` — model decides steps at runtime
 
-class AgentState(TypedDict):
-    query: str
-    context: str
-    build_status: str
-    report: str
-    steps: int
+Run the fixed chain:
 
-def retrieve_context(state: AgentState) -> AgentState:
-    """Step 1: Retrieve relevant docs from RAG."""
-    chunks = retrieve(state["query"], k=3)
-    state["context"] = "\n\n".join(chunks)
-    state["steps"] += 1
-    return state
-
-def check_build(state: AgentState) -> AgentState:
-    """Step 2: Call get_build_status tool."""
-    result = get_build_status.invoke({"service_name": "payment-api"})
-    state["build_status"] = result
-    state["steps"] += 1
-    return state
-
-def generate_report(state: AgentState) -> AgentState:
-    """Step 3: Produce a structured readiness report."""
-    llm = get_llm(temperature=0)
-    response = llm.invoke([
-        SystemMessage(content="You are a DevOps analyst. Produce a readiness report."),
-        HumanMessage(content=(
-            f"Query: {state['query']}\n\n"
-            f"Relevant docs:\n{state['context']}\n\n"
-            f"Build status: {state['build_status']}\n\n"
-            f"Generate a readiness report with: summary, readiness (ready/blocked), "
-            f"and recommended actions."
-        )),
-    ])
-    state["report"] = response.content
-    state["steps"] += 1
-    return state
-
-# Build the graph
-graph = StateGraph(AgentState)
-graph.add_node("retrieve", retrieve_context)
-graph.add_node("check_build", check_build)
-graph.add_node("report", generate_report)
-graph.set_entry_point("retrieve")
-graph.add_edge("retrieve", "check_build")
-graph.add_edge("check_build", "report")
-graph.add_edge("report", END)
-agent = graph.compile()
-
-# Run it
-result = agent.invoke({"query": "Is the payment-api ready for v2.1?", "context": "", "build_status": "", "report": "", "steps": 0})
-print(result["report"])
+```bash
+python scripts/week-06/demo-01-fixed-chain.py
 ```
 
-**You just built an agent.** 3 steps, state carried between them, runs end-to-end. Confirm: does the report reference the retrieved docs AND the build status?
+The chain: extract service → retrieve → check build → report. 4 steps every time.
+Notice: it checks the RIGHT service (extracted from the query), but the path is rigid.
+If you added a `check_deploys` node, the fixed chain couldn't use it.
 
 ---
 
-### Step 2: Break the chain (10 min)
+### Step 2: Run the dynamic agent (10 min)
 
-The fixed chain always calls `get_build_status("payment-api")`. What if the query is about `auth-service`? Or `inventory-service`?
-
-```python
-# Run a different query — agent still checks payment-api
-result = agent.invoke({"query": "Is the auth-service ready for release?", ...})
+```bash
+python scripts/week-06/demo-02-dynamic-routing.py
 ```
 
-The agent ignores the query and checks payment-api. **The chain is hardcoded. It can't adapt.**
+The dynamic agent adapts to each query:
+- *"Is payment-api healthy?"* → retrieve + check_build + report (3 steps)
+- *"What was deployed and any incidents?"* → retrieve + check_deploys + check_incidents + report (4 steps)
+- *"Full readiness assessment"* → all 4 data steps + report (5 steps)
 
-Now remove a step. Delete the `check_build` node from the graph. Run a query that needs build status. What happens? The agent skips it silently and produces a report without build data. **Fixed chains are brittle.**
+**Key insight:** The router only runs steps the query explicitly asks for. It won't
+cascade — "healthy?" doesn't trigger "also check incidents." This keeps costs
+proportional to the query complexity.
 
 ---
 
-### Step 3: Dynamic routing (10 min)
+### Step 3: Break it — test the guard (5 min)
 
-Replace the fixed edges with a router that lets the model decide:
+Open `src/agent.py`. Find the guard function:
 
 ```python
-def router(state: AgentState) -> str:
-    """Model decides which step to run next."""
-    llm = get_llm(temperature=0)
-    response = llm.invoke([
-        SystemMessage(content=(
-            "You are a workflow router. Based on the query and what's been done so far, "
-            "decide the next step. Respond with ONLY one word:\n"
-            "- 'retrieve' if context is needed\n"
-            "- 'check_build' if build status is needed\n"
-            "- 'report' if ready to generate the final report\n"
-            "- 'done' if the workflow is complete\n\n"
-            f"Query: {state['query']}\n"
-            f"Steps completed: {state['steps']}\n"
-            f"Context available: {'yes' if state['context'] else 'no'}\n"
-            f"Build status available: {'yes' if state['build_status'] else 'no'}"
-        )),
-    ])
-    return response.content.strip()
-
-# Replace fixed edges with conditional routing
-graph.add_conditional_edges("retrieve", router, {
-    "check_build": "check_build",
-    "report": "report",
-    "done": END,
-})
-graph.add_conditional_edges("check_build", router, {
-    "retrieve": "retrieve",
-    "report": "report",
-    "done": END,
-})
+MAX_STEPS = 10
+MAX_COST = 2.00
 ```
 
-Run 3 different queries. Does the model route differently? **Cost:** compare calls — fixed chain = 3 LLM calls. Dynamic = 3 + 1 per routing decision.
+Change `MAX_STEPS` to `2`. Run a query that needs 3+ steps:
+
+```python
+from src.agent import run_dynamic_agent
+result = run_dynamic_agent("Give me a full readiness assessment for payment-api")
+print(result["steps"])  # → 2 (stopped by guard)
+```
+
+The agent stops before completing. **Guards prevent runaway agents** — essential
+for production where every step costs money.
+
+Change `MAX_STEPS` back to `10` when done.
 
 ---
 
-### Step 4: Add a guard (5 min)
+### Step 4: Extend — add a new tool (optional, 10 min)
 
-Prevent runaway agents:
-
-```python
-def guard(state: AgentState) -> str:
-    """Stop if too many steps or cost too high."""
-    if state["steps"] >= 10:
-        return "done"
-    return router(state)  # delegate to normal routing
-
-# Replace router with guarded version
-graph.add_conditional_edges("retrieve", guard, {...})
-graph.add_conditional_edges("check_build", guard, {...})
-```
-
-Run a query that would loop. The guard stops it at 10 steps. In production: cost guard (`if cost > $2.00`), not just step count.
+Add a new tool to `src/mcp_server.py` (like `get_service_owner`), then add a
+corresponding node in `agent.py`. Add the node to `build_dynamic_agent()` and
+the router's decision list. Restart and test — the agent now has a new capability.
 
 ---
 
@@ -215,10 +145,10 @@ python scripts/week-06/demo-03-conversational-agent.py  # talk to DevBuddy
 ---
 
 ## Acceptance Criteria
-- [ ] Fixed 3-step chain (retrieve → tool → report) runs end-to-end
-- [ ] A query about a different service exposes the hardcoded limitation
-- [ ] Dynamic routing adapts to 3 different queries with different step sequences
-- [ ] Guard stops the agent at 10 steps or $2.00
+- [ ] Fixed chain (extract → retrieve → build → report) runs end-to-end via demo-01
+- [ ] Dynamic agent adapts to 3 different queries with different step counts via demo-02
+- [ ] Guard stops the agent when `MAX_STEPS` is lowered to 2
+- [ ] You can trace cost per step and total cost for a query
 - [ ] You can explain: *"Fixed chains are predictable but brittle. Dynamic routing adapts but costs more."*
 
 ---
@@ -254,8 +184,9 @@ python scripts/week-06/demo-03-conversational-agent.py  # talk to DevBuddy
 | Problem | Fix |
 |---------|-----|
 | `ImportError: langgraph` | `pip install langgraph` |
-| Agent loops infinitely | Add the guard — step limit or cost limit |
+| Agent loops infinitely | The guard is already there — `MAX_STEPS=10`, `MAX_COST=$2.00` |
 | Router always picks the same step | Improve the routing prompt. Make decision criteria explicit. |
+| MCP tool call fails | Ensure Qdrant is running (`docker-compose up -d`) and index exists |
 | State not carrying between steps | Check that each node returns the state dict |
 
 ---
