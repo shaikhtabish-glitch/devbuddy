@@ -136,6 +136,15 @@ def get_active_incidents(service_name: str) -> str:
     )
 
 
+@mcp.tool()
+def search_docs(query: str, k: int = 3) -> str:
+    """Search the documentation index for relevant context.
+    Returns the top-k most relevant document chunks as a JSON array of strings.
+    Use this to find documentation, setup guides, API specs, or any written knowledge."""
+    chunks = retrieve(query, k=k)
+    return json.dumps(chunks, indent=2)
+
+
 # ── Entry point ───────────────────────────────────────────────
 
 if __name__ == "__main__":

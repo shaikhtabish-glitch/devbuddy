@@ -36,14 +36,17 @@ dynamic agent builders. It composes everything from Weeks 2–5:
 ```
 agent.py
 ├── from src.llm import get_llm          # Week 1
-├── from src.rag import retrieve         # Week 3 (RAG)
-├── MCP session (spawns mcp_server.py)   # Week 5 (tools via MCP)
+├── spawns mcp_server.py as subprocess   # Week 5 — ALL data access via MCP
+│   ├── search_docs(query, k)            #   retrieval (Week 3)
+│   ├── get_build_status(service_name)   #   tools (Week 4)
+│   ├── get_recent_deploys(...)          #
+│   └── get_active_incidents(...)        #
 └── LangGraph StateGraph                 # orchestrator
 ```
 
-Tools are called through the MCP server from Week 5 — no direct imports from
-`src.tools`. The agent spawns `mcp_server.py` as a subprocess for each tool call.
-This is simple and reliable — MCP's stdio transport manages its own lifecycle.
+**Single data path.** All data access — retrieval and tools — goes through the
+MCP server. The agent has no direct dependency on `src.rag` or `src.tools`.
+`mcp_server.py` handles indexing at startup, so the agent doesn't need to.
 
 **The import graph is now complete.** Every module built so far feeds into the agent.
 
