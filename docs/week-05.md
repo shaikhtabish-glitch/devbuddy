@@ -27,11 +27,10 @@ python -m pytest tests/test_tools.py -v -k "not run_tool_loop"
 
 ## What You Have
 
-Open `src/mcp_server.py`. It's a stub. By the end of this session, it will:
-
-- Start an MCP server that exposes tools from `src/tools.py`
-- Accept client connections over stdio transport
-- Let any MCP client discover and call `get_build_status`, `get_recent_deploys`, `get_active_incidents`
+Open `src/mcp_server.py`. It uses FastMCP to expose 3 tools — but here's what's
+different from Week 4: these tools don't use hardcoded mock data. They query the
+**Week 3 RAG index** (Qdrant) and synthesise results with the LLM. One data source,
+many consumers. By the end of this session, you'll understand why that matters.
 
 ## The Architecture
 
@@ -51,8 +50,9 @@ Open `src/mcp_server.py`. It's a stub. By the end of this session, it will:
 **Write once. Consume anywhere.** Python, Node.js, Java — any MCP client can use your tools.
 
 ## Files You'll Touch
-- `src/mcp_server.py` — the MCP server (imports `src.tools`)
-- `src/tools.py` — already built (3 tools with mock data)
+- `src/mcp_server.py` — the MCP server (imports `src.rag` for RAG data, `src.llm` for synthesis)
+- `src/rag.py` — already built (Week 3 vector store — tools query it directly)
+- `src/llm.py` — already built (Week 1 OpenRouter client)
 - `scripts/week-05/` — demo scripts
 
 ---
@@ -63,32 +63,33 @@ The moderator runs a demo first (stand up server + connect client). Watch, then 
 
 ---
 
-### Step 1: Stand up the MCP server (10 min)
+### Step 1: Study the MCP server (10 min)
 
-`src/mcp_server.py` is a stub. The server wraps your existing tools and exposes them over MCP:
+Open `src/mcp_server.py`. Walk through the architecture:
 
 ```python
-# src/mcp_server.py
-import asyncio
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
+from mcp.server.fastmcp import FastMCP
+from src.rag import retrieve, index_documents   # Week 3 RAG
+from src.llm import get_llm                      # Week 1 client
 
-from src.tools import get_build_status, get_recent_deploys, get_active_incidents
+mcp = FastMCP("devbuddy-mcp")
 
-app = Server("devbuddy-mcp")
+# Shared helper — every tool follows this pattern
+def _synthesise(instructions, query, k=5):
+    chunks = retrieve(query, k=k)       # ← hits Qdrant, not hardcoded dicts
+    # feed chunks to LLM → returns JSON
 
-# Register tools from src/tools.py
-app.add_tool(get_build_status)
-app.add_tool(get_recent_deploys)
-app.add_tool(get_active_incidents)
-
-async def main():
-    async with stdio_server() as (read_stream, write_stream):
-        await app.run(read_stream, write_stream, app.create_initialization_options())
-
-if __name__ == "__main__":
-    asyncio.run(main())
+@mcp.tool()
+def get_build_status(service_name: str) -> str:
+    return _synthesise(
+        "Extract the current build/health status...",
+        f"{service_name} build status health check deploy",
+    )
 ```
+
+**Key insight:** The `@mcp.tool()` decorator registers the function with FastMCP.
+Under the hood, each tool retrieves chunks from the Week 3 Qdrant index and
+synthesises a JSON result with the LLM. Same RAG pipeline, new consumer.
 
 Start it:
 
