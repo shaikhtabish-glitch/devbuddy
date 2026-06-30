@@ -84,12 +84,12 @@ def index_documents(
 
     emb = _get_embeddings()
 
-    # Connect to Qdrant, recreate collection with fresh vectors
+    # Connect to Qdrant — skip if collection already exists
     client = QdrantClient(url=QDRANT_URL)
-    try:
-        client.delete_collection(QDRANT_COLLECTION)
-    except Exception:
-        pass
+    existing = {c.name for c in client.get_collections().collections}
+    if QDRANT_COLLECTION in existing:
+        # Reuse existing index — no need to re-embed
+        return len(chunks)
 
     # Get embedding dimension from the model
     test_vec = emb.embed_query("test")

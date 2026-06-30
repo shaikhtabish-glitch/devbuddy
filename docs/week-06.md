@@ -15,7 +15,7 @@ pip install -r requirements.txt   # langgraph>=0.2.0 should be installed
 # Qdrant must be running
 docker-compose up -d
 
-# Index the documents (Week 3 — required before running the agent)
+# Index the documents (safe to run multiple times — skips if already indexed)
 python -c "from src.rag import index_documents; index_documents()"
 ```
 
