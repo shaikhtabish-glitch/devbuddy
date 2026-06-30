@@ -84,11 +84,15 @@ def index_documents(
 
     emb = _get_embeddings()
 
-    # Connect to Qdrant — skip if collection already exists
+    # Connect to Qdrant — skip if collection already has data
     client = QdrantClient(url=QDRANT_URL)
-    existing = {c.name for c in client.get_collections().collections}
-    if QDRANT_COLLECTION in existing:
-        return 0  # already indexed — nothing to do
+    try:
+        info = client.get_collection(QDRANT_COLLECTION)
+        if info.points_count and info.points_count > 0:
+            return 0  # already indexed with data — nothing to do
+        client.delete_collection(QDRANT_COLLECTION)
+    except Exception:
+        pass  # collection doesn't exist yet
 
     # Get embedding dimension from the model
     test_vec = emb.embed_query("test")
