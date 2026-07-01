@@ -13,12 +13,6 @@ Imports: from src.rag import retrieve, index_documents
          from langchain_core.messages import HumanMessage, SystemMessage
 """
 import os, sys, json
-import logging
-
-# Suppress noisy SSE disconnect errors (empty lines on client disconnect)
-logging.getLogger("mcp.server.lowlevel.server").setLevel(logging.CRITICAL)
-logging.getLogger("mcp.server.exception_handler").setLevel(logging.CRITICAL)
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mcp.server.fastmcp import FastMCP
@@ -40,11 +34,7 @@ mcp = FastMCP(
 
 try:
     count = index_documents()
-    # Only log if we actually built the index (first time)
-    if count > 0:
-        print(f"RAG index built: {count} chunks indexed", file=sys.stderr)
-    else:
-        print("RAG index already exists — reusing", file=sys.stderr)
+    print(f"RAG index ready: {count} chunks indexed", file=sys.stderr)
 except Exception as e:
     print(f"WARNING: Could not index documents — {e}", file=sys.stderr)
     print("Make sure Qdrant is running: docker-compose up -d", file=sys.stderr)
@@ -66,25 +56,18 @@ def _synthesise(instructions: str, query: str, k: int = 5) -> str:
         SystemMessage(content=(
             "You are a data extraction tool. "
             "Only use data present in the provided context. Do not invent information. "
-            "Return ONLY valid JSON (object or array) — no markdown, no prose.\n\n"
-            "If no relevant data is found in the context, return a JSON object "
-            "with 'status': 'unknown' and 'reason': 'no matching data found'.\n\n"
+            "Return ONLY raw JSON — no markdown fences, no backticks, no explanations. "
             f"{instructions}"
         )),
         HumanMessage(content=f"Context:\n{context}")
     ])
+    # Strip markdown fences if the model added them anyway
     text = response.content.strip()
-    # Strip markdown fences
     if text.startswith("```"):
         text = text.split("\n", 1)[1] if "\n" in text else text[3:]
         if text.endswith("```"):
-            text = text[:-3].strip()
-    # Validate — fallback to structured unknown if not valid JSON
-    try:
-        json.loads(text)
-        return text
-    except (json.JSONDecodeError, ValueError):
-        return json.dumps({"status": "unknown", "reason": "could not parse tool result"})
+            text = text[:-3]
+    return text.strip()
 
 
 # ── Tools ─────────────────────────────────────────────────────
@@ -153,18 +136,8 @@ def get_active_incidents(service_name: str) -> str:
     )
 
 
-@mcp.tool()
-def search_docs(query: str, k: int = 3) -> str:
-    """Search the documentation index for relevant context.
-    Returns a JSON object with 'chunks' (array of strings) and 'found' (bool).
-    Use this to find documentation, setup guides, API specs, or any written knowledge."""
-    chunks = retrieve(query, k=k)
-    return json.dumps({"chunks": chunks, "found": len(chunks) > 0})
-
-
 # ── Entry point ───────────────────────────────────────────────
 
 if __name__ == "__main__":
-    # SSE transport — long-lived daemon. Model loads once, all
-    # clients share it. No per-call subprocess spawning penalty.
+    # SSE transport — long-lived daemon. Model loads once, all clients share it.
     mcp.run(transport="sse")
