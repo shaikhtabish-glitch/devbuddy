@@ -7,7 +7,7 @@ the model chose for each query, so you can compare routing decisions.
 Requires: MCP server running (python src/mcp_server.py in another terminal)
 Run: python scripts/week-06/demo-02-dynamic-routing.py
 """
-import os, sys, json
+import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.agent import run_dynamic_agent
@@ -33,22 +33,22 @@ for query, label in queries:
     print(f"  📥  QUERY: \"{query}\"")
     result = run_dynamic_agent(query)
 
-    # Show which data was collected
-    collected = []
-    if result.get("context"):   collected.append("📄 docs")
-    if result.get("build_status"): collected.append("🏗️  build")
-    if result.get("deploys"):   collected.append("🚀 deploys")
-    if result.get("incidents"): collected.append("🚨 incidents")
+    # Reconstruct the step sequence from state
+    steps_taken = ["📄 docs"]  # always runs retrieve first
+    if result.get("build_status"): steps_taken.append("🏗️  build")
+    if result.get("deploys"):     steps_taken.append("🚀 deploys")
+    if result.get("incidents"):   steps_taken.append("🚨 incidents")
+    steps_taken.append("📝 report")  # always ends with report
 
     print(f"  ⚡  Steps: {result['steps']}  |  Cost: ${result['cost']:.6f}")
-    print(f"  📊  Collected: {' + '.join(collected) if collected else '(none)'}")
+    print(f"  🔀  Path:   {' → '.join(steps_taken)}")
     print(f"  {'─' * 59}")
     print(f"  {result['report'][:300]}")
     print()
 
 print("=" * 65)
 print("  Dynamic agent adapts — more steps = higher cost,")
-print("  but greater correctness. Fixed chain (demo-01) is")
-print("  cheaper but always runs docs + build regardless.")
+print("  but greater correctness. Fixed chain is cheaper but")
+print("  always runs: 📄 docs → 🏗️ build → 📝 report")
 print("=" * 65)
 print()

@@ -80,6 +80,7 @@ trace_fixed_chain("Is the auth-service ready for release?")
 
 print("=" * 65)
 print("  Fixed chain: 4 steps. Same sequence every time.")
+print("  🔀  Path:  📄 docs → 🏗️ build → 📝 report")
 print("  Predictable and auditable, but can't add steps like")
 print("  deploys or incidents. Run demo-02 for dynamic routing.")
 print("=" * 65)
