@@ -1,25 +1,23 @@
 """
 Demo 2: MCP Tools + LLM — model decides, MCP executes
 
-Connects to the MCP server, discovers tools, and lets the LLM decide
-which tools to call at runtime. The LLM produces structured tool-call
-decisions (Week 2 pattern), and the MCP session executes them.
+Connects to the MCP server over SSE, discovers tools, and lets the LLM
+decide which tools to call at runtime. Same decide → execute → return
+loop from Week 4, but tools are discovered dynamically via MCP.
 
-This is the same decide → execute → return loop from Week 4, but the
-tools are discovered dynamically from the MCP server — not hardcoded.
-
+Requires: MCP server running (python src/mcp_server.py in another terminal)
 Run: python scripts/week-05/demo-02-mcp-with-llm.py
 """
 import asyncio, os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from pydantic import BaseModel, Field
-from mcp.client.stdio import stdio_client
-from mcp import ClientSession, StdioServerParameters
+from mcp.client.sse import sse_client
+from mcp import ClientSession
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from src.llm import get_llm
 
-SERVER_SCRIPT = os.path.join(os.path.dirname(__file__), "..", "..", "src", "mcp_server.py")
+MCP_URL = "http://127.0.0.1:8000/sse"
 
 
 class MCPToolDecision(BaseModel):
@@ -30,9 +28,7 @@ class MCPToolDecision(BaseModel):
 
 
 async def main():
-    server_params = StdioServerParameters(command="python", args=[SERVER_SCRIPT])
-
-    async with stdio_client(server_params) as (read, write):
+    async with sse_client(MCP_URL) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
 

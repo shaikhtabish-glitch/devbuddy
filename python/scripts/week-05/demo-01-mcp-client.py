@@ -1,20 +1,19 @@
 """
 Demo 1: MCP Client — Connect, Discover, Call
 
-Connects to the DevBuddy MCP server, lists available tools, and calls
-them with real data from the Week 3 RAG index. Demonstrates the full
-client → server → tool → response path.
+Connects to the DevBuddy MCP server over SSE, lists available tools,
+and calls them with real data from the Week 3 RAG index.
 
+Requires: MCP server running (python src/mcp_server.py in another terminal)
 Run: python scripts/week-05/demo-01-mcp-client.py
-(Requires Qdrant running: docker-compose up -d)
 """
 import asyncio, os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from mcp.client.stdio import stdio_client
-from mcp import ClientSession, StdioServerParameters
+from mcp.client.sse import sse_client
+from mcp import ClientSession
 
-SERVER_SCRIPT = os.path.join(os.path.dirname(__file__), "..", "..", "src", "mcp_server.py")
+MCP_URL = "http://127.0.0.1:8000/sse"
 
 TOOL_ICONS = {
     "get_build_status": "🏗️",
@@ -24,9 +23,8 @@ TOOL_ICONS = {
 
 
 async def main():
-    server_params = StdioServerParameters(command="python", args=[SERVER_SCRIPT])
 
-    async with stdio_client(server_params) as (read, write):
+    async with sse_client(MCP_URL) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
