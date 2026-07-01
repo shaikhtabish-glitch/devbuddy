@@ -72,11 +72,17 @@ async def main():
             result = await session.call_tool(
                 "get_recent_deploys", {"service_name": "payment-api", "limit": 2}
             )
-            deploys = json.loads(result.content[0].text) if result.content else []
-            for d in deploys:
-                status_icon = "✅" if d.get("status") == "success" else "❌"
-                print(f"      →  {status_icon}  {d.get('sha','?')[:12]}  "
-                      f"{d.get('author','?'):<8}  {d.get('timestamp','?')}")
+            raw = json.loads(result.content[0].text) if result.content else []
+            deploys = raw if isinstance(raw, list) else []
+            if isinstance(raw, dict) and raw.get("status") == "unknown":
+                print(f"      →  (tool unavailable: {raw.get('reason', '?')})")
+            elif deploys:
+                for d in deploys:
+                    status_icon = "✅" if d.get("status") == "success" else "❌"
+                    print(f"      →  {status_icon}  {d.get('sha','?')[:12]}  "
+                          f"{d.get('author','?'):<8}  {d.get('timestamp','?')}")
+            else:
+                print("      →  (no recent deploys)")
             print()
 
             # ── INCIDENTS ──────────────────────────────────────
@@ -87,8 +93,11 @@ async def main():
             result = await session.call_tool(
                 "get_active_incidents", {"service_name": "payment-api"}
             )
-            incidents = json.loads(result.content[0].text) if result.content else []
-            if incidents:
+            raw = json.loads(result.content[0].text) if result.content else []
+            incidents = raw if isinstance(raw, list) else []
+            if isinstance(raw, dict) and raw.get("status") == "unknown":
+                print(f"      →  (tool unavailable: {raw.get('reason', '?')})")
+            elif incidents:
                 for inc in incidents:
                     sev = inc.get("severity", "?")
                     print(f"      →  {sev:<6}  {inc.get('id','?')}")
