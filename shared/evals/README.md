@@ -25,5 +25,6 @@ This runs a basic eval: does the model return valid JSON with the expected field
 | `week-02-structured-output.yaml` | Week 2 | Schema adherence, field types, retry behavior |
 | `week-03-rag-grounding.yaml` | Week 3 | Retrieved context relevance, hallucination suppression |
 | `week-04-tool-selection.yaml` | Week 4 | Correct tool routing, error handling |
+| `week-05-mcp-tool-ecosystem.yaml` | Week 5 | Tool synthesis: valid JSON, correct structure for each tool |
 | `week-06-agent-planning.yaml` | Week 6 | Step sequence correctness, state coherence |
 | `week-07-production-suite.yaml` | Week 7 | Guardrails, cost, latency, provider swap |
