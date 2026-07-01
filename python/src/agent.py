@@ -1,14 +1,14 @@
 """
 Week 6 — Agent Orchestrator: Multi-Step Workflows
 
-Chains retrieval (Week 3) and tool calling (Week 5) into an autonomous
-pipeline using LangGraph. All data access goes through the MCP server —
-including retrieval (search_docs) and tools (get_build_status, etc.).
-Single data path: agent → MCP server → RAG index.
+Composes retrieval (Week 3) and tool calling (Week 5) into an autonomous
+pipeline using LangGraph. Retrieval imports src.rag directly. Tools go
+through the MCP server (get_build_status, get_recent_deploys, etc.).
 
 Imports:
   from src.llm import get_llm
-  MCP subprocess for all data access
+  from src.rag import retrieve   (context node)
+  MCP SSE client for tool calls
 """
 import os, sys, json, asyncio
 from typing import TypedDict
@@ -91,14 +91,13 @@ def extract_service(state: AgentState) -> AgentState:
 
 
 def retrieve_context(state: AgentState) -> AgentState:
-    """Retrieve relevant documents via MCP search_docs tool."""
-    result = _call_mcp_tool("search_docs", {"query": state["query"], "k": 3})
+    """Retrieve relevant documents from the RAG index (Week 3)."""
+    from src.rag import retrieve
     try:
-        data = json.loads(result)
-        chunks = data.get("chunks", [])
+        chunks = retrieve(state["query"], k=3)
         state["context"] = "\n\n---\n\n".join(chunks) if chunks else "(no relevant documents found)"
-    except json.JSONDecodeError:
-        state["context"] = "(search_docs returned invalid response)"
+    except Exception as e:
+        state["context"] = f"(retrieval error: {e})"
     state["steps"] += 1
     return state
 
