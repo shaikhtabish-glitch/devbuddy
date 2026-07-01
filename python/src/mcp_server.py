@@ -15,6 +15,10 @@ Imports: from src.rag import retrieve, index_documents
 import os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Load .env for API keys (OPENROUTER_API_KEY needed by get_llm)
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+
 from mcp.server.fastmcp import FastMCP
 from langchain_core.messages import HumanMessage, SystemMessage
 from src.rag import retrieve, index_documents
