@@ -15,6 +15,9 @@ will be the foundation of a complete AI agent.
 """
 import os
 import sys
+# Ensure local src/ takes priority over any system-level src/ packages
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import time
 from datetime import datetime
 
