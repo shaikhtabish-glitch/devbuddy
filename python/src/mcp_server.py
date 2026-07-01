@@ -51,34 +51,43 @@ def _synthesise(instructions: str, query: str, k: int = 5) -> str:
 
     Assumes documents have already been indexed (Week 3). If the index doesn't
     exist, retrieve() raises a clear RuntimeError — index first, then use tools.
-    """
-    chunks = retrieve(query, k=k)
-    context = "\n\n---\n\n".join(chunks) if chunks else "(no data found)"
 
-    llm = get_llm(temperature=0)
-    response = llm.invoke([
-        SystemMessage(content=(
-            "You are a data extraction tool. "
-            "Only use data present in the provided context. Do not invent information. "
-            "Return ONLY valid JSON (object or array) — no markdown, no prose.\n\n"
-            "If no relevant data is found in the context, return a JSON object "
-            "with 'status': 'unknown' and 'reason': 'no matching data found'.\n\n"
-            f"{instructions}"
-        )),
-        HumanMessage(content=f"Context:\n{context}")
-    ])
-    text = response.content.strip()
-    # Strip markdown fences
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-        if text.endswith("```"):
-            text = text[:-3].strip()
-    # Validate — fallback to structured unknown if not valid JSON
+    Wrapped in a try/except so tool calls never crash the MCP protocol. Any error
+    is returned as structured JSON the client can always parse.
+    """
     try:
-        json.loads(text)
-        return text
-    except (json.JSONDecodeError, ValueError):
-        return json.dumps({"status": "unknown", "reason": "could not parse tool result"})# ── Tools ─────────────────────────────────────────────────────
+        chunks = retrieve(query, k=k)
+        context = "\n\n---\n\n".join(chunks) if chunks else "(no data found)"
+
+        llm = get_llm(temperature=0)
+        response = llm.invoke([
+            SystemMessage(content=(
+                "You are a data extraction tool. "
+                "Only use data present in the provided context. Do not invent information. "
+                "Return ONLY valid JSON (object or array) — no markdown, no prose.\n\n"
+                "If no relevant data is found in the context, return a JSON object "
+                "with 'status': 'unknown' and 'reason': 'no matching data found'.\n\n"
+                f"{instructions}"
+            )),
+            HumanMessage(content=f"Context:\n{context}")
+        ])
+        text = response.content.strip()
+        # Strip markdown fences
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            if text.endswith("```"):
+                text = text[:-3].strip()
+        # Validate — fallback to structured unknown if not valid JSON
+        try:
+            json.loads(text)
+            return text
+        except (json.JSONDecodeError, ValueError):
+            return json.dumps({"status": "unknown", "reason": "could not parse tool result"})
+    except Exception as e:
+        return json.dumps({
+            "status": "unknown",
+            "reason": f"tool error: {type(e).__name__} — {str(e)}"
+        })# ── Tools ─────────────────────────────────────────────────────
 
 @mcp.tool()
 def get_build_status(service_name: str) -> str:

@@ -14,12 +14,12 @@ import asyncio, os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from pydantic import BaseModel, Field
-from mcp.client.stdio import stdio_client
-from mcp import ClientSession, StdioServerParameters
-from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from mcp.client.sse import sse_client
+from mcp import ClientSession
+from langchain_core.messages import HumanMessage, SystemMessage
 from src.llm import get_llm
 
-SERVER_SCRIPT = os.path.join(os.path.dirname(__file__), "..", "..", "src", "mcp_server.py")
+MCP_URL = "http://127.0.0.1:8000/sse"
 
 
 class MCPToolDecision(BaseModel):
@@ -30,9 +30,7 @@ class MCPToolDecision(BaseModel):
 
 
 async def main():
-    server_params = StdioServerParameters(command="python", args=[SERVER_SCRIPT])
-
-    async with stdio_client(server_params) as (read, write):
+    async with sse_client(MCP_URL) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
