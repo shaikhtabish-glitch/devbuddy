@@ -57,7 +57,7 @@ def main():
         print(f"❌ {e}")
         sys.exit(1)
 
-    structured_llm = llm.with_structured_output(BuildCheck)
+    structured_llm = llm.with_structured_output(BuildCheck, include_raw=True)
 
     projects = ["auth-service", "api-gateway", "user-service"]
     total_cost = 0.0
@@ -87,8 +87,10 @@ def main():
 
         elapsed = time.time() - start
 
-        # Extract token usage from OpenRouter response metadata
-        usage = response.response_metadata.get("token_usage", {})
+        # Extract the typed object and token usage
+        result = response["parsed"]
+        raw = response.get("raw")
+        usage = raw.response_metadata.get("token_usage", {}) if raw else {}
         prompt_tokens = usage.get("prompt_tokens", 0)
         completion_tokens = usage.get("completion_tokens", 0)
         call_tokens = prompt_tokens + completion_tokens
@@ -98,13 +100,13 @@ def main():
         cost = (prompt_tokens * 0.15 + completion_tokens * 0.60) / 1_000_000
         total_cost += cost
 
-        print(f"  Status:      {response.status}")
-        print(f"  Confidence:  {response.confidence:.0%}")
-        print(f"  Reason:      {response.explanation}")
+        print(f"  Status:      {result.status}")
+        print(f"  Confidence:  {result.confidence:.0%}")
+        print(f"  Reason:      {result.explanation}")
         print(f"  Tokens:      {call_tokens} ({prompt_tokens} in / {completion_tokens} out)")
         print(f"  Cost:        ${cost:.6f}")
         print(f"  Time:        {elapsed:.2f}s")
-        print(f"  Type:        {type(response).__name__} ← typed object, not a string!")
+        print(f"  Type:        {type(result).__name__} ← typed object, not a string!")
         print()
 
     # ─── Summary ───────────────────────────────────────────────
