@@ -1,6 +1,9 @@
 # Week 4 — Tool Selection Eval
 #
-# Tests correct tool routing and error handling.
+# Tests that the model correctly decides WHICH tool to call and with
+# WHAT arguments. Uses structured output — the model MUST return a
+# typed decision, not prose.
+#
 # Run: npx promptfoo@latest eval --config week-04-tool-selection.yaml
 #
 # Prerequisites:
@@ -17,38 +20,88 @@ providers:
 prompts:
   - |-
     You have access to the following tools:
-    - get_build_status(service_name) — returns current build health
-    - get_recent_deploys(service_name, limit) — returns recent deployments
-    - get_active_incidents(service_name) — returns active incidents
+    - get_build_status(service_name: str) — returns current build health
+    - get_recent_deploys(service_name: str, limit: int) — returns recent deployments
+    - get_active_incidents(service_name: str) — returns active incidents
 
-    Answer the user's question. Call the appropriate tool(s) if needed.
-    If no tool is needed, answer directly.
+    For the user's question, decide which tool(s) to call and with what
+    arguments. Return ONLY valid JSON with this structure:
+    {
+      "tools": [
+        {"name": "<tool_name>", "args": {"<param>": "<value>"}}
+      ]
+    }
+    If no tool is needed, return {"tools": []}.
 
     Question: {{question}}
 
 tests:
-  - vars:
+  # ── Correct routing: single tool ─────────────────────────────
+  - description: "Health check → get_build_status"
+    vars:
       question: "Is the auth-service healthy?"
     assert:
-      - type: contains
-        value: "healthy"
+      - type: is-json
+      - type: javascript
+        value: "JSON.parse(output).tools.length === 1"
+      - type: javascript
+        value: "JSON.parse(output).tools[0].name === 'get_build_status'"
+      - type: javascript
+        value: "JSON.parse(output).tools[0].args.service_name === 'auth-service'"
 
-  - vars:
+  - description: "Deployment history → get_recent_deploys"
+    vars:
       question: "What were the last 3 deployments for payment-api?"
     assert:
-      - type: contains
-        value: "deploy"
+      - type: is-json
+      - type: javascript
+        value: "JSON.parse(output).tools[0].name === 'get_recent_deploys'"
+      - type: javascript
+        value: "JSON.parse(output).tools[0].args.service_name === 'payment-api'"
+      - type: javascript
+        value: "JSON.parse(output).tools[0].args.limit === 3"
 
-  - vars:
+  - description: "Incidents → get_active_incidents"
+    vars:
       question: "Are there any active incidents for the inventory-service?"
     assert:
-      - type: contains
-        value: "incident"
+      - type: is-json
+      - type: javascript
+        value: "JSON.parse(output).tools[0].name === 'get_active_incidents'"
+      - type: javascript
+        value: "JSON.parse(output).tools[0].args.service_name === 'inventory-service'"
 
-  - vars:
+  # ── No tool needed ───────────────────────────────────────────
+  - description: "General knowledge → no tool"
+    vars:
       question: "What is 2 + 2?"
     assert:
-      - type: contains
-        value: "4"
-      - type: not-contains
-        value: "tool"
+      - type: is-json
+      - type: javascript
+        value: "JSON.parse(output).tools.length === 0"
+
+  # ── Multi-tool routing ───────────────────────────────────────
+  - description: "Health + incidents → two tools"
+    vars:
+      question: "Is the payment-api healthy and are there any active incidents?"
+    assert:
+      - type: is-json
+      - type: javascript
+        value: "JSON.parse(output).tools.length === 2"
+      - type: javascript
+        value: "JSON.parse(output).tools.map(t => t.name).includes('get_build_status')"
+      - type: javascript
+        value: "JSON.parse(output).tools.map(t => t.name).includes('get_active_incidents')"
+
+  # ── Ambiguous: service not in query ──────────────────────────
+  - description: "Missing service name → still makes a call (model infers or defaults)"
+    vars:
+      question: "What's the latest build status?"
+    assert:
+      - type: is-json
+      - type: javascript
+        value: "JSON.parse(output).tools.length >= 1"
+      - type: javascript
+        value: "JSON.parse(output).tools[0].name === 'get_build_status'"
+      - type: javascript
+        value: "'service_name' in JSON.parse(output).tools[0].args"
