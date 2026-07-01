@@ -7,7 +7,7 @@ the model chose for each query, so you can compare routing decisions.
 Requires: MCP server running (python src/mcp_server.py in another terminal)
 Run: python scripts/week-06/demo-02-dynamic-routing.py
 """
-import os, sys
+import os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.agent import run_dynamic_agent
@@ -32,6 +32,7 @@ for query, label in queries:
     print(f"  ── {label} ──")
     print(f"  📥  QUERY: \"{query}\"")
     result = run_dynamic_agent(query)
+    time.sleep(1)  # let SSE connection close cleanly before next query
 
     # Reconstruct the step sequence from state
     steps_taken = ["📄 docs"]  # always runs retrieve first
