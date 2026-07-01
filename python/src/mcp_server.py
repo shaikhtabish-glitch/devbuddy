@@ -13,6 +13,12 @@ Imports: from src.rag import retrieve, index_documents
          from langchain_core.messages import HumanMessage, SystemMessage
 """
 import os, sys, json
+import logging
+
+# Suppress noisy SSE disconnect errors (empty lines on client disconnect)
+logging.getLogger("mcp.server.lowlevel.server").setLevel(logging.CRITICAL)
+logging.getLogger("mcp.server.exception_handler").setLevel(logging.CRITICAL)
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mcp.server.fastmcp import FastMCP
