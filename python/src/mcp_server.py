@@ -56,21 +56,25 @@ def _synthesise(instructions: str, query: str, k: int = 5) -> str:
         SystemMessage(content=(
             "You are a data extraction tool. "
             "Only use data present in the provided context. Do not invent information. "
-            "Return ONLY raw JSON — no markdown fences, no backticks, no explanations. "
+            "Return ONLY valid JSON (object or array) — no markdown, no prose.\n\n"
+            "If no relevant data is found in the context, return a JSON object "
+            "with 'status': 'unknown' and 'reason': 'no matching data found'.\n\n"
             f"{instructions}"
         )),
         HumanMessage(content=f"Context:\n{context}")
     ])
-    # Strip markdown fences if the model added them anyway
     text = response.content.strip()
+    # Strip markdown fences
     if text.startswith("```"):
         text = text.split("\n", 1)[1] if "\n" in text else text[3:]
         if text.endswith("```"):
-            text = text[:-3]
-    return text.strip()
-
-
-# ── Tools ─────────────────────────────────────────────────────
+            text = text[:-3].strip()
+    # Validate — fallback to structured unknown if not valid JSON
+    try:
+        json.loads(text)
+        return text
+    except (json.JSONDecodeError, ValueError):
+        return json.dumps({"status": "unknown", "reason": "could not parse tool result"})# ── Tools ─────────────────────────────────────────────────────
 
 @mcp.tool()
 def get_build_status(service_name: str) -> str:
