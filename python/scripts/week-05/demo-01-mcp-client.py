@@ -56,7 +56,10 @@ async def main():
                     "get_build_status", {"service_name": service}
                 )
                 data = result.content[0].text if result.content else "{}"
-                parsed = json.loads(data)
+                try:
+                    parsed = json.loads(data)
+                except (json.JSONDecodeError, ValueError):
+                    parsed = {"status": "error", "last_deploy": "?"}
                 print(f"      →  RESPONSE  {service}: {parsed.get('status', '?').upper()}")
                 print(f"                  last deploy  {parsed.get('last_deploy', '?')}")
                 print()
