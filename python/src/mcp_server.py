@@ -139,4 +139,5 @@ def get_active_incidents(service_name: str) -> str:
 # ── Entry point ───────────────────────────────────────────────
 
 if __name__ == "__main__":
-    mcp.run()
+    # SSE transport — long-lived daemon. Model loads once, all clients share it.
+    mcp.run(transport="sse")
