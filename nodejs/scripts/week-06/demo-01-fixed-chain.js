@@ -21,3 +21,4 @@ console.log(result.report);
 console.log();
 console.log(`  Steps: ${result.steps}, Cost: $${result.cost.toFixed(6)}`);
 console.log("=".repeat(60));
+process.exit(0);

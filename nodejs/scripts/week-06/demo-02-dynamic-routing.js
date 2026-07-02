@@ -27,3 +27,4 @@ for (const q of queries) {
 
 console.log("  Each query triggered a different path — the model decided.");
 console.log("=".repeat(60));
+process.exit(0);
