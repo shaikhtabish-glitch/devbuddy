@@ -133,7 +133,7 @@ async function runDemo() {
     "}\n\n" +
     "DIFF:\n";
 
-  const llmRaw = getLlm({ temperature: testTemperature });
+  const llmRaw = getLlm({ temperature: testTemperature, maxTokens: 300 });
 
   console.log("  Sending prompt to model...");
   const responseRaw = await llmRaw.invoke([
@@ -217,7 +217,7 @@ async function runDemo() {
   console.log("=".repeat(75));
   console.log();
 
-  const llmStructured = getLlm({ temperature: testTemperature });
+  const llmStructured = getLlm({ temperature: testTemperature, maxTokens: 300 });
   const structuredLlm = llmStructured.withStructuredOutput(
     DiffAnalysisSchema
   );

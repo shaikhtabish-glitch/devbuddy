@@ -45,6 +45,7 @@ for (const temp of [0.0, 0.3, 0.7, 1.0]) {
     title: PR_TITLE,
     diff: PR_DIFF,
     temperature: temp,
+    maxTokens: 200,
   });
   console.log(`  temp=${temp} (${label}):`);
   console.log(`    severity=${result.severity}`);
@@ -98,7 +99,7 @@ console.log("─".repeat(65));
 console.log();
 
 for (const temp of [0.0, 0.7]) {
-  const llm = getLlm({ temperature: temp });
+  const llm = getLlm({ temperature: temp, maxTokens: 200 });
   const start = performance.now();
   const response = await llm.invoke([
     new HumanMessage(`PR: ${PR_TITLE}\nDiff: ${PR_DIFF}`),
