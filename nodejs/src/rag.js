@@ -196,13 +196,14 @@ function _bm25Search(query, documents, k) {
  * @param {string} query - The user's question.
  * @param {number} [k=3] - Number of chunks to retrieve.
  * @param {number} [temperature=0.0] - 0.0 for deterministic output.
+ * @param {number} [maxTokens=500] - Max tokens in LLM response.
  * @returns {Promise<string>} The LLM's answer, grounded in retrieved documents.
  */
-export async function groundedAnswer(query, k = 3, temperature = 0.0) {
+export async function groundedAnswer(query, k = 3, temperature = 0.0, maxTokens = 500) {
   const chunks = await retrieve(query, k);
   const context = chunks.join("\n\n---\n\n");
 
-  const llm = getLlm({ temperature });
+  const llm = getLlm({ temperature, maxTokens });
   const response = await llm.invoke([
     new SystemMessage(
       "You are a knowledge base assistant. Answer the user's question " +
@@ -225,17 +226,19 @@ export async function groundedAnswer(query, k = 3, temperature = 0.0) {
  * @param {string} query - The user's question.
  * @param {number} [k=3] - Number of chunks to retrieve.
  * @param {number} [temperature=0.0] - 0.0 for deterministic output.
+ * @param {number} [maxTokens=500] - Max tokens in LLM response.
  * @returns {Promise<[string, string[]]>} Tuple of [answer, list_of_retrieved_chunks].
  */
 export async function groundedAnswerWithChunks(
   query,
   k = 3,
-  temperature = 0.0
+  temperature = 0.0,
+  maxTokens = 500
 ) {
   const chunks = await retrieve(query, k);
   const context = chunks.join("\n\n---\n\n");
 
-  const llm = getLlm({ temperature });
+  const llm = getLlm({ temperature, maxTokens });
   const response = await llm.invoke([
     new SystemMessage(
       "You are a knowledge base assistant. Answer the user's question " +
