@@ -13,6 +13,7 @@ import { fileURLToPath } from "url";
 import { HuggingFaceTransformersEmbeddings } from "@langchain/community/embeddings/huggingface_transformers";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { QdrantVectorStore } from "@langchain/qdrant";
+import { QdrantClient } from "@qdrant/js-client-rest";
 import { Document } from "@langchain/core/documents";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { getLlm } from "./llm.js";
@@ -99,6 +100,14 @@ export async function indexDocuments(
   const chunks = await splitter.splitDocuments(docs);
 
   const emb = await _getEmbeddings();
+
+  // Delete the collection if it exists to ensure a fresh index
+  const client = new QdrantClient({ url: QDRANT_URL });
+  try {
+    await client.deleteCollection(QDRANT_COLLECTION);
+  } catch (e) {
+    // Collection might not exist, ignore
+  }
 
   // Connect to Qdrant, recreate collection with fresh vectors
   _vectorstore = await QdrantVectorStore.fromDocuments(chunks, emb, {
