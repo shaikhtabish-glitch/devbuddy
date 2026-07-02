@@ -115,7 +115,7 @@ python scripts/week-06/demo-03-conversational-agent.py
 # Node.js
 node scripts/week-06/demo-01-fixed-chain.js
 node scripts/week-06/demo-02-dynamic-routing.js
-node scripts/week-06/demo-03-full-assessment.js
+node scripts/week-06/demo-03-conversational-agent.js
 ```
 
 The chain: extract service → retrieve → check build → report. 4 steps every time.
