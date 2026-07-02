@@ -204,7 +204,7 @@ async function router(state) {
         "- check_build   (ONLY if the query asks about health, status, healthy, or readiness)\n" +
         "- check_deploys (ONLY if the query asks about deployments, releases, deployed)\n" +
         "- check_incidents (ONLY if the query asks about incidents, outages, issues, or alerts)\n" +
-        "- report    (if all NEEDED data has been collected for this specific query)\n" +
+        "- generate_report    (if all NEEDED data has been collected)\n" +
         "- done      (if the task is complete or cannot proceed)\n\n" +
         "IMPORTANT: Only run steps the query explicitly asks for. " +
         "Do NOT cascade. 'healthy?' does NOT mean 'also check incidents'."
@@ -218,7 +218,7 @@ async function router(state) {
         `- Deploys checked: ${state.deploys ? "YES" : "NO"}\n` +
         `- Incidents checked: ${state.incidents ? "YES" : "NO"}\n\n` +
         `NEVER return a step that already has data (YES above). ` +
-        `If all needed data is YES, return 'report'.\n\n` +
+        `If all needed data is YES, return 'generate_report'.\n\n` +
         `Next step:`
     ),
   ]);
@@ -251,12 +251,12 @@ export function buildFixedChain() {
   graph.addNode("extract_service", extractService);
   graph.addNode("retrieve", retrieveContext);
   graph.addNode("check_build", checkBuild);
-  graph.addNode("report", generateReport);
+  graph.addNode("generate_report", generateReport);
   graph.addEdge("__start__", "extract_service");
   graph.addEdge("extract_service", "retrieve");
   graph.addEdge("retrieve", "check_build");
-  graph.addEdge("check_build", "report");
-  graph.addEdge("report", END);
+  graph.addEdge("check_build", "generate_report");
+  graph.addEdge("generate_report", END);
   return graph.compile();
 }
 
@@ -267,7 +267,7 @@ export function buildDynamicAgent() {
   graph.addNode("check_build", checkBuild);
   graph.addNode("check_deploys", checkDeploys);
   graph.addNode("check_incidents", checkIncidents);
-  graph.addNode("report", generateReport);
+  graph.addNode("generate_report", generateReport);
 
   graph.addEdge("__start__", "extract_service");
   graph.addEdge("extract_service", "retrieve");
@@ -277,7 +277,7 @@ export function buildDynamicAgent() {
     check_build: "check_build",
     check_deploys: "check_deploys",
     check_incidents: "check_incidents",
-    report: "report",
+    generate_report: "generate_report",
     done: END,
   };
 
