@@ -19,6 +19,17 @@
     "dotenv": "^16.4.0",
     "zod": "^3.23.0"
   },
+  "overrides": {
+    "undici": "$undici"
+  },
+  "pnpm": {
+    "overrides": {
+      "undici": "$undici"
+    }
+  },
+  "resolutions": {
+    "undici": "^7.0.0"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "vitest": "^2.0.0",
