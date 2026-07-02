@@ -14,4 +14,6 @@ java/.gradle/
 java/build/
 nodejs/node_modules/
 nodejs/.env
-chroma_db/
+
+# IDE
+.idea/
