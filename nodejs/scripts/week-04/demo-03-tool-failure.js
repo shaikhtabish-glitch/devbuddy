@@ -5,25 +5,48 @@
  */
 import { runToolLoop, executeToolSafely } from "../../src/tools.js";
 
-console.log("=".repeat(60));
-console.log("  Demo 3: Tool Failure — Application-layer error handling");
-console.log("=".repeat(60));
+function printHeader(text) {
+  console.log("\x1b[36m" + "=".repeat(80) + "\x1b[0m");
+  console.log(`  \x1b[1m\x1b[35m${text}\x1b[0m`);
+  console.log("\x1b[36m" + "=".repeat(80) + "\x1b[0m");
+}
+
+printHeader("Demo 3: Graceful Tool Failure & Application Guardrails");
+console.log();
+console.log("  What happens when the tool fails, is passed bad arguments, or is unknown?");
+console.log("  Your application layer must handle errors safely and feed constructive feedback");
+console.log("  back to the LLM so it can report issues without crashing.");
 console.log();
 
-// 1. Unknown service — tool returns structured error
-console.log("  Query: 'Is the nonexistent-service healthy?'");
-const answer1 = await runToolLoop("Is the nonexistent-service healthy?");
-console.log(`  Answer: ${answer1}`);
-console.log("  → Tool returned 'unknown' with error. App handled it gracefully.");
+// Scenario 1: Non-existent service name passed to a valid tool
+const query1 = "Is the nonexistent-service healthy?";
+console.log(`  \x1b[1mScenario 1: Bad arguments passed to valid tool\x1b[0m`);
+console.log(`  Query: "${query1}"`);
+console.log("  Running...");
+const answer1 = await runToolLoop(query1);
+console.log(`  🤖 \x1b[36mLLM Response:\x1b[0m ${answer1}`);
+console.log("  → The tool returned a structured error JSON, allowing the LLM to explain");
+console.log("    the status cleanly instead of crashing the process.");
+console.log();
+console.log(`  ${"─".repeat(76)}`);
 console.log();
 
-// 2. Unknown tool — executeToolSafely catches it
-console.log("  Calling non-existent tool directly:");
+// Scenario 2: Model attempts to call an unauthorized/nonexistent tool
+console.log(`  \x1b[1mScenario 2: Guarding against unauthorized tool execution\x1b[0m`);
+console.log("  Attempting to execute direct instruction: { name: 'delete_production_db', args: {} }");
+console.log("  Executing safely...");
 const result = await executeToolSafely({
   name: "delete_production_db",
   args: {},
 });
-console.log(`  Result: ${result}`);
+console.log(`  💻 \x1b[31mExecution Layer Result:\x1b[0m ${result}`);
 console.log();
-console.log("  The model decides. Your code executes and enforces.");
-console.log("=".repeat(60));
+console.log("  → Guardrail: Our local execution router (executeToolSafely) checked its registry,");
+console.log("    rejected the call, and returned a list of safe available tools.");
+console.log();
+console.log(`  ${"─".repeat(76)}`);
+console.log();
+console.log("  \x1b[1m\x1b[33mKey Takeaway:\x1b[0m");
+console.log("  Never trust the LLM's raw tool request. Always route execution through a registry");
+console.log("  guardrail (`executeToolSafely`) that enforces schema limits and traps exceptions.");
+console.log("\x1b[36m" + "=".repeat(80) + "\x1b[0m");
