@@ -4,9 +4,9 @@
   "description": "DevBuddy AI Practitioner Series — Node.js Blueprint",
   "type": "module",
   "scripts": {
-    "verify": "node src/verification.js",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "verify": "NODE_OPTIONS=--no-experimental-fetch node src/verification.js",
+    "test": "NODE_OPTIONS=--no-experimental-fetch vitest run",
+    "test:watch": "NODE_OPTIONS=--no-experimental-fetch vitest"
   },
   "dependencies": {
     "@langchain/core": "^0.3.0",
@@ -25,10 +25,5 @@
   },
   "engines": {
     "node": ">=20.0.0"
-  },
-  "comments": {
-    "week-3": "npm install @langchain/community chromadb @xenova/transformers",
-    "week-5": "npm install @modelcontextprotocol/sdk",
-    "week-6": "npm install @langchain/langgraph"
   }
 }
