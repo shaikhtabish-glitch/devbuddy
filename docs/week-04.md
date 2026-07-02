@@ -6,6 +6,8 @@
 
 ## Setup
 
+### Python
+
 ```bash
 cd python
 source .venv/bin/activate
@@ -13,16 +15,32 @@ git pull upstream main
 pip install -r requirements.txt
 
 # Qdrant must be running (Week 3+)
-docker-compose up -d   # or 'docker compose up -d'
+docker-compose up -d
 curl http://localhost:6333/healthz
+```
+
+### Node.js
+
+```bash
+cd nodejs
+git pull upstream main
+npm install --legacy-peer-deps
 ```
 
 Verify you're ready:
 
+**Python:**
+
 ```bash
-# Week 2 + 3 baseline
 python -m pytest tests/test_schemas.py -v -k "not analyze_pr"
 python -m pytest tests/test_rag.py -v
+```
+
+**Node.js:**
+
+```bash
+npx vitest run tests/test_tools.js -t "getBuildStatus|getRecentDeploys|getActiveIncidents|executeToolSafely|ALL_TOOLS"
+# 10 tests — all pure JS, no API calls needed
 ```
 
 ---
@@ -211,18 +229,22 @@ The model sees the structured error and can decide: retry, try a different tool,
 
 ### Step 5: Explore (remaining time)
 
+**Python:**
+
 ```bash
-# Study the full tool-calling loop
-cat scripts/week-04/demo-01-tool-call.py
-
-# Play with tool routing
-cat scripts/week-04/demo-02-tool-routing.py
-
-# Break things and observe recovery
-cat scripts/week-04/demo-03-tool-failure.py
-
-# Full trace with all 3 tools — see every step
+python scripts/week-04/demo-01-tool-call.py
+python scripts/week-04/demo-02-tool-routing.py
+python scripts/week-04/demo-03-tool-failure.py
 python scripts/week-04/demo-04-full-trace.py
+```
+
+**Node.js:**
+
+```bash
+node scripts/week-04/demo-01-tool-call.js
+node scripts/week-04/demo-02-tool-routing.js
+node scripts/week-04/demo-03-tool-failure.js
+node scripts/week-04/demo-04-full-trace.js
 ```
 
 ---
@@ -324,6 +346,9 @@ Write a 1-paragraph ADR: "We placed error-handling logic in the application laye
 | Problem | Fix |
 |---------|-----|
 | Model doesn't call the tool | Check tool name matches the prompt. Add a more descriptive docstring. |
-| `bind_tools` not found | Update langchain: `pip install --upgrade langchain-core` |
+| `bind_tools` not found (Python) | Update langchain: `pip install --upgrade langchain-core` |
+| `bindTools` not found (Node.js) | Update: `npm install @langchain/core@latest` |
 | Model calls wrong tool | Improve tool descriptions. Make them specific and distinct. |
-| `ToolMessage` not found | Import from `langchain_core.messages` |
+| `ToolMessage` not found (Python) | Import from `langchain_core.messages` |
+| `ToolMessage` not found (Node.js) | Import from `@langchain/core/messages` |
+| `npm install` fails | Use `--legacy-peer-deps` flag |
