@@ -85,17 +85,16 @@ async function synthesise(instructions, query, k = 5) {
   }
 }
 
-// ── Server + tools ────────────────────────────────────────────
-
-const server = new Server(
-  {
-    name: "devbuddy-mcp",
-    version: "0.1.0",
-  },
-  {
-    capabilities: { tools: {} },
-  }
-);
+export function createMcpServer() {
+  const server = new Server(
+    {
+      name: "devbuddy-mcp",
+      version: "0.1.0",
+    },
+    {
+      capabilities: { tools: {} },
+    }
+  );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
@@ -199,6 +198,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+  return server;
+}
+
 // ── Entry point — SSE transport (long-lived daemon) ──────────
 
 async function main() {
@@ -212,11 +214,19 @@ async function main() {
     const transport = new SSEServerTransport("/messages", res);
     transports[transport.sessionId] = transport;
 
+    const serverInstance = createMcpServer();
+
     res.on("close", () => {
       delete transports[transport.sessionId];
+      try {
+        transport.close();
+      } catch (e) {}
+      try {
+        serverInstance.close();
+      } catch (e) {}
     });
 
-    await server.connect(transport);
+    await serverInstance.connect(transport);
   });
 
   app.post("/messages", async (req, res) => {

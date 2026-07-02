@@ -131,7 +131,15 @@ export async function indexDocuments(
  */
 export async function retrieve(query, k = 3) {
   if (!_vectorstore) {
-    throw new Error("No index found. Run indexDocuments() first.");
+    try {
+      const emb = await _getEmbeddings();
+      _vectorstore = await QdrantVectorStore.fromExistingCollection(emb, {
+        url: QDRANT_URL,
+        collectionName: QDRANT_COLLECTION,
+      });
+    } catch (e) {
+      throw new Error(`No index found. Run indexDocuments() first. (Error: ${e.message})`);
+    }
   }
   const results = await _vectorstore.similaritySearch(query, k);
   return results.map((doc) => doc.pageContent);

@@ -12,6 +12,8 @@
  */
 import { StateGraph, END } from "@langchain/langgraph";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { getLlm } from "./llm.js";
 
 // ═══════════════════════════════════════════════════════════════
@@ -19,28 +21,30 @@ import { getLlm } from "./llm.js";
 // ═══════════════════════════════════════════════════════════════
 
 const MCP_URL = "http://127.0.0.1:3001/sse";
+let _mcpClient = null;
+
+async function getMcpClient() {
+  if (!_mcpClient) {
+    const transport = new SSEClientTransport(new URL(MCP_URL));
+    const client = new Client(
+      { name: "devbuddy-agent-client", version: "0.1.0" },
+      { capabilities: {} }
+    );
+    await client.connect(transport);
+    _mcpClient = client;
+  }
+  return _mcpClient;
+}
 
 async function callMcpTool(toolName, args) {
   /** Call a tool on the MCP server over SSE. */
   try {
-    // Use JSON-RPC over HTTP to the SSE endpoint
-    const response = await fetch(`${MCP_URL.replace("/sse", "")}/message`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        method: "tools/call",
-        params: { name: toolName, arguments: args },
-        id: Date.now(),
-      }),
+    const client = await getMcpClient();
+    const result = await client.callTool({
+      name: toolName,
+      arguments: args,
     });
-    const data = await response.json();
-    if (data.error) {
-      return JSON.stringify({ error: data.error.message, tool: toolName });
-    }
-    // Extract text content from the result
-    const content = data.result?.content || [];
-    return content.map((c) => c.text).join("\n") || JSON.stringify(data.result);
+    return result.content[0].text;
   } catch (e) {
     return JSON.stringify({ error: e.message, tool: toolName, status: "failed" });
   }
@@ -204,7 +208,7 @@ async function router(state) {
         "- check_build   (ONLY if the query asks about health, status, healthy, or readiness)\n" +
         "- check_deploys (ONLY if the query asks about deployments, releases, deployed)\n" +
         "- check_incidents (ONLY if the query asks about incidents, outages, issues, or alerts)\n" +
-        "- generate_report    (if all NEEDED data has been collected)\n" +
+        "- generate_report    (if all requested data has been collected)\n" +
         "- done      (if the task is complete or cannot proceed)\n\n" +
         "IMPORTANT: Only run steps the query explicitly asks for. " +
         "Do NOT cascade. 'healthy?' does NOT mean 'also check incidents'."
@@ -217,8 +221,8 @@ async function router(state) {
         `- Build status checked: ${state.build_status ? "YES" : "NO"}\n` +
         `- Deploys checked: ${state.deploys ? "YES" : "NO"}\n` +
         `- Incidents checked: ${state.incidents ? "YES" : "NO"}\n\n` +
-        `NEVER return a step that already has data (YES above). ` +
-        `If all needed data is YES, return 'generate_report'.\n\n` +
+        `NEVER return a step that already has data (YES above).\n` +
+        `If all information explicitly requested by the query has been collected (denoted by YES in the list above), return 'generate_report'.\n\n` +
         `Next step:`
     ),
   ]);
