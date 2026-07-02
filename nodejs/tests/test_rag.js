@@ -1,7 +1,7 @@
 /**
  * Tests for src/rag.js — Week 3 (Node.js)
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import {
   indexDocuments,
   retrieve,
