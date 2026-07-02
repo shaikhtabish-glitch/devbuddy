@@ -91,10 +91,11 @@ describe("analyzePr", () => {
       title: "Fix login redirect loop in auth-service",
       diff,
       temperature: 0.0,
+      maxTokens: 200,
     });
     expect(result.project).toBeTruthy();
     expect(result.severity).toBeTruthy();
-  });
+  }, 60_000);
 });
 
 // ═══════════════════════════════════════════════════════════════
