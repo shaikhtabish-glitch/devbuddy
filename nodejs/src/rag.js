@@ -10,7 +10,7 @@
 import { readFileSync, readdirSync } from "fs";
 import { resolve, extname, basename, dirname } from "path";
 import { fileURLToPath } from "url";
-import { HuggingFaceTransformersEmbeddings } from "@langchain/community/embeddings/huggingface_transformers.js";
+import { HuggingFaceTransformersEmbeddings } from "@langchain/community/embeddings/huggingface_transformers";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { Document } from "@langchain/core/documents";
