@@ -119,8 +119,11 @@ synthesises a JSON result with the LLM. Same RAG pipeline, new consumer.
 Start it:
 
 ```bash
-# Qdrant must be running first: docker-compose up -d
+# Python
 python src/mcp_server.py
+
+# Node.js
+node src/mcp_server.js
 # → RAG index ready: 19 chunks indexed
 # → Server running on stdio. Waiting for client connections...
 ```
