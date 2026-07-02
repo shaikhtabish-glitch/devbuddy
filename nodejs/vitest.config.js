@@ -5,8 +5,5 @@ export default defineConfig({
     include: ["tests/**/*.{test,spec}.?(c|m)[jt]s?(x)", "tests/**/test_*.?(c|m)[jt]s?(x)"],
     testTimeout: 120_000,
     hookTimeout: 120_000,
-    env: {
-      NODE_OPTIONS: "--no-experimental-fetch",
-    },
   },
 });
