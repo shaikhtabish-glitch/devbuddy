@@ -35,7 +35,12 @@ curl http://localhost:6333/healthz
 
 # 3. Install dependencies
 cd nodejs
-npm install
+# Use --legacy-peer-deps to bypass peer conflicts (e.g. better-sqlite3)
+npm install --legacy-peer-deps
+
+# 4. (For Node 26+) Approve installation scripts for native modules if warned:
+# npm approve-scripts onnxruntime-node protobufjs sharp esbuild
+# npm install --legacy-peer-deps
 ```
 
 Verify you're ready:
@@ -250,8 +255,10 @@ With 8 documents, the top-5 may be identical. With 50+ docs, BM25 surfaces keywo
 | `ConnectionError` on Qdrant | `docker-compose up -d` from repo root, then `curl localhost:6333/healthz` |
 | Embedding model slow first run | ~80MB download. Let it finish. Subsequent runs are instant. |
 | `pip install` fails | Make sure you're in `python/` with `.venv` activated |
-| `npm install` fails | Use `--legacy-peer-deps` flag, or check Node.js >= 20 |
-| `ERR_MODULE_NOT_FOUND: @langchain/qdrant` | Run `npm install` from `nodejs/` to install week-3 deps |
+| `npm install` fails | Use `npm install --legacy-peer-deps` flag to resolve peer dependency mismatches. |
+| `ERR_MODULE_NOT_FOUND: @langchain/qdrant` | Run `npm install --legacy-peer-deps` from `nodejs/` |
+| `ERR_MODULE_NOT_FOUND: onnxruntime-common` | Run `npm install --legacy-peer-deps onnxruntime-common` at the root of the `nodejs` directory. |
+| `allow-scripts` script blocked warnings (Node 26+) | Run `npm approve-scripts onnxruntime-node protobufjs sharp esbuild` and then run `npm install --legacy-peer-deps` again. |
 
 ---
 
