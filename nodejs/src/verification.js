@@ -13,13 +13,10 @@
  * By Week 7, this pattern — LLM → structured output → cost tracking —
  * will be the foundation of a complete AI agent.
  */
-import "dotenv/config";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { z } from "zod";
+import { config, calculateCost, inspect } from "./config.js";
 import { getLlm } from "./llm.js";
-
-// ─── Configuration ─────────────────────────────────────────────
-const MODEL = process.env.DEBUDDY_MODEL || "openai/gpt-4o-mini";
 
 // ─── Schema Definition ─────────────────────────────────────────
 // This is a preview of Week 2. Today you just see it work.
@@ -50,13 +47,7 @@ async function main() {
   console.log("=".repeat(60));
   console.log();
 
-  let llm;
-  try {
-    llm = getLlm(MODEL, 0.0);
-  } catch (e) {
-    console.error(`❌ ${e.message}`);
-    process.exit(1);
-  }
+  const llm = getLlm();
 
   const structuredLlm = llm.withStructuredOutput(BuildCheckSchema, {
     name: "build_check",
@@ -103,14 +94,14 @@ async function main() {
       raw?.usage_metadata ||
       {};
 
-    const promptTokens = tokenUsage.prompt_tokens || tokenUsage.input_tokens || 0;
+    const promptTokens =
+      tokenUsage.prompt_tokens || tokenUsage.input_tokens || 0;
     const completionTokens =
       tokenUsage.completion_tokens || tokenUsage.output_tokens || 0;
     const callTokens = promptTokens + completionTokens;
     totalTokens += callTokens;
 
-    // Cost estimate (GPT-4o-mini via OpenRouter: ~$0.15/M input, ~$0.60/M output)
-    const cost = (promptTokens * 0.15 + completionTokens * 0.60) / 1_000_000;
+    const cost = calculateCost(promptTokens, completionTokens);
     totalCost += cost;
 
     console.log(`  Status:      ${result.status}`);
@@ -132,15 +123,12 @@ async function main() {
   console.log("=".repeat(60));
   console.log("  ✅ VERIFICATION PASSED");
   console.log(`  Runtime:    Node.js ${process.version}`);
-  console.log(`  Model:      ${MODEL}`);
+  console.log(`  Model:      ${config.model}`);
   console.log(`  Total tokens: ${totalTokens}`);
   console.log(`  Total cost:   $${totalCost.toFixed(6)}`);
   console.log(`  Date:       ${now}`);
   console.log();
-  console.log("  Your environment is ready for Week 1.");
-  console.log("  Post this output to #devbuddy-series to confirm.");
-  console.log();
-  console.log("  What do you want DevBuddy to help you with?");
+  console.log("  DevBuddy will help you with:");
   console.log("  _______________________________________________");
   console.log("=".repeat(60));
 }
