@@ -43,7 +43,7 @@ const [answer2, chunks2] = await groundedAnswerWithChunks(
 console.log(`     Answer: ${answer2}`);
 console.log("     Retrieved chunks:");
 for (let i = 0; i < chunks2.length; i++) {
-  console.log(`       ${i + 1}. ${chunks2[i].slice(0, 100)}...`);
+  console.log(`       ${i + 1}. ${chunks2[i]}`);
 }
 console.log("     ✅ Model grounded in documents");
 console.log();

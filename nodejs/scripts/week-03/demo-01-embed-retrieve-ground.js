@@ -31,7 +31,7 @@ const chunks = await retrieve(
 );
 console.log();
 for (let i = 0; i < chunks.length; i++) {
-  console.log(`  Chunk ${i + 1}: ${chunks[i].slice(0, 150)}...`);
+  console.log(`  Chunk ${i + 1}: ${chunks[i]}`);
 }
 console.log();
 

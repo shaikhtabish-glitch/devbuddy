@@ -22,7 +22,7 @@ for (const size of [256, 512, 1024]) {
   const chunks = await retrieve(question, 3);
   console.log(`  Top-3 retrieved chunks:`);
   for (let i = 0; i < chunks.length; i++) {
-    console.log(`    [${i + 1}] ${chunks[i].slice(0, 120)}...`);
+    console.log(`    [${i + 1}] ${chunks[i]}`);
   }
   console.log();
 }
