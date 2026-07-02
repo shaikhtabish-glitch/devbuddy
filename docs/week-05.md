@@ -121,11 +121,11 @@ Start it:
 ```bash
 # Python
 python src/mcp_server.py
+# → Server running on http://localhost:8000/sse
 
 # Node.js
 node src/mcp_server.js
-# → RAG index ready: 19 chunks indexed
-# → Server running on stdio. Waiting for client connections...
+# → Server running on http://localhost:3001/sse
 ```
 
 The server indexes documents from `shared/data/` once at startup, then serves
