@@ -6,28 +6,51 @@
 
 ## Setup
 
+### Python
+
 ```bash
 cd python
 source .venv/bin/activate
 git pull upstream main
-pip install -r requirements.txt   # langgraph>=0.2.0 should be installed
+pip install -r requirements.txt
 
-# Terminal 1: Start the MCP server (SSE — model loads once, reused for all calls)
+# Terminal 1: Start the MCP server
 python src/mcp_server.py
-# → RAG index built: 19 chunks indexed
-# → Uvicorn running on http://127.0.0.1:8000
+# → http://127.0.0.1:8000/sse
 
 # Terminal 2: Qdrant must be running
 docker-compose up -d
-
-# Index the documents (safe to run multiple times — skips if already indexed)
 python -c "from src.rag import index_documents; index_documents()"
+```
+
+### Node.js
+
+```bash
+cd nodejs
+git pull upstream main
+npm install --legacy-peer-deps
+
+# Terminal 1: Start the MCP server
+node src/mcp_server.js
+# → http://localhost:3001/sse
+
+# Terminal 2: Qdrant must be running
+docker-compose up -d
 ```
 
 Verify you're ready:
 
+**Python:**
+
 ```bash
-python -m pytest tests/ -v -k "not analyze_pr and not run_tool_loop"
+python -m pytest tests/test_agent.py -v
+```
+
+**Node.js:**
+
+```bash
+node scripts/week-06/demo-01-fixed-chain.js
+```
 ```
 
 ---
@@ -84,7 +107,15 @@ The moderator runs a demo first (fixed chain: RAG → tool → structured output
 Run the fixed chain:
 
 ```bash
+# Python
 python scripts/week-06/demo-01-fixed-chain.py
+python scripts/week-06/demo-02-dynamic-routing.py
+python scripts/week-06/demo-03-conversational-agent.py
+
+# Node.js
+node scripts/week-06/demo-01-fixed-chain.js
+node scripts/week-06/demo-02-dynamic-routing.js
+node scripts/week-06/demo-03-full-assessment.js
 ```
 
 The chain: extract service → retrieve → check build → report. 4 steps every time.
@@ -195,10 +226,12 @@ python scripts/week-06/demo-03-conversational-agent.py  # talk to DevBuddy
 
 | Problem | Fix |
 |---------|-----|
-| `ImportError: langgraph` | `pip install langgraph` |
+| `ImportError: langgraph` (Python) | `pip install langgraph` |
+| `ERR_MODULE_NOT_FOUND: @langchain/langgraph` (Node.js) | `npm install --legacy-peer-deps` from `nodejs/` |
 | Agent loops infinitely | The guard is already there — `MAX_STEPS=10`, `MAX_COST=$2.00` |
 | Router always picks the same step | Improve the routing prompt. Make decision criteria explicit. |
-| MCP tool call fails | Ensure MCP server is running (`python src/mcp_server.py`) and Qdrant is up |
+| MCP tool call fails | Ensure MCP server is running and Qdrant is up |
+| MCP connection refused (Node.js) | Check port 3001 is correct: `node src/mcp_server.js` |
 | State not carrying between steps | Check that each node returns the state dict |
 
 ---
