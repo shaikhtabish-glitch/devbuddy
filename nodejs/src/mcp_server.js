@@ -202,17 +202,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // ── Entry point — SSE transport (long-lived daemon) ──────────
 
 async function main() {
-  const app = (await import("express")).default();
+  const express = (await import("express")).default;
+  const app = express();
+
   const PORT = process.env.MCP_PORT || 3001;
+  const transports = {};
 
   app.get("/sse", async (req, res) => {
     const transport = new SSEServerTransport("/messages", res);
+    transports[transport.sessionId] = transport;
+
+    res.on("close", () => {
+      delete transports[transport.sessionId];
+    });
+
     await server.connect(transport);
   });
 
   app.post("/messages", async (req, res) => {
-    // SSE transport handles message posting internally
-    res.status(200).end();
+    const sessionId = req.query.sessionId;
+    const transport = transports[sessionId];
+
+    if (transport) {
+      await transport.handlePostMessage(req, res);
+    } else {
+      res.status(400).send("No transport found for sessionId");
+    }
   });
 
   app.listen(PORT, () => {
