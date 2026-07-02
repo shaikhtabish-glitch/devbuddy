@@ -62,11 +62,11 @@ export const config = {
     default: { input: 0.15, output: 0.6 },
   },
 
-  // Week 3 — RAG (not yet active, just defaults)
-  vectorStoreUrl: get("QDRANT_URL", "http://localhost:6333"),
+  // Week 3 — RAG
+  vectorStoreUrl: process.env.QDRANT_URL || "http://localhost:6333",
   embeddingModel: "Xenova/all-MiniLM-L6-v2",
   defaultChunkSize: 512,
-  defaultChunkOverlap: 50,
+  defaultChunkOverlap: 64,
 
   // Week 6 — Agent (not yet active)
   maxAgentSteps: 10,
