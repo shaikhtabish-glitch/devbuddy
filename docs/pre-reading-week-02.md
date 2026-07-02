@@ -42,7 +42,7 @@ Open `src/schemas.py`. It already contains two schema families:
 - **`BuildCheck`** — a flat 4-field model for PR analysis. This is the in-session exercise. You'll reproduce it, break it, vary temperature, and add few-shot examples.
 - **`ServiceReadinessReport`** — a composed schema with 5 nested models, `Optional` fields, and cross-field validators. This is what DevBuddy produces at Week 7. You'll explore it during self-learning with mock data (no API calls needed).
 
-The demo scripts in `scripts/week-02/` show why this matters — free-text crashes a parser, Pydantic saves it. The "request vs contract" distinction is the most important idea in AI-first engineering.
+The demo scripts in `scripts/week-02/` show why this matters — free-text crashes a parser, structured output saves it. The "request vs contract" distinction is the most important idea in AI-first engineering.
 
 **You'll also:** vary temperature, break the schema on purpose, add a few-shot example, and see what happens. The skill isn't getting it right the first time — it's building systems that survive the breakage.
 
@@ -50,6 +50,16 @@ The demo scripts in `scripts/week-02/` show why this matters — free-text crash
 
 ## One Thing to Try
 
-Before the session, run: `python scripts/week-02/explore-readiness-report.py`
+Before the session, run the explore script for your language:
 
-It loads 3 mock JSON scenarios and validates each against `ServiceReadinessReport`. You'll see nested models, `Optional` fields, and cross-field validators in action — before you write a single line of code. Ask yourself: *"How would I build this schema? What would break if I changed field types?"*
+**Python:**
+```bash
+python scripts/week-02/explore-readiness-report.py
+```
+
+**Node.js:**
+```bash
+node scripts/week-02/explore-readiness-report.js
+```
+
+It loads mock JSON scenarios and validates them against `ServiceReadinessReport`. You'll see nested models, optional fields, and cross-field validators in action — before you write a single line of code. Ask yourself: *"How would I build this schema? What would break if I changed field types?"*

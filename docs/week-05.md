@@ -6,6 +6,8 @@
 
 ## Setup
 
+### Python
+
 ```bash
 cd python
 source .venv/bin/activate
@@ -16,7 +18,30 @@ pip install -r requirements.txt   # mcp>=1.0.0 should be installed
 docker-compose up -d
 ```
 
+### Node.js
+
+```bash
+cd nodejs
+git pull upstream main
+npm install --legacy-peer-deps   # @modelcontextprotocol/sdk should be installed
+
+# Qdrant must be running (Week 3+)
+docker-compose up -d
+```
+
 Verify you're ready:
+
+**Python:**
+
+```bash
+python -m pytest tests/test_mcp_server.py -v
+```
+
+**Node.js:**
+
+```bash
+npx vitest run tests/test_mcp_server.js
+```
 
 ```bash
 python -c "import mcp; print('MCP SDK OK')"
@@ -94,10 +119,13 @@ synthesises a JSON result with the LLM. Same RAG pipeline, new consumer.
 Start it:
 
 ```bash
-# Qdrant must be running first: docker-compose up -d
+# Python
 python src/mcp_server.py
-# → RAG index ready: 19 chunks indexed
-# → Server running on stdio. Waiting for client connections...
+# → Server running on http://localhost:8000/sse
+
+# Node.js
+node src/mcp_server.js
+# → Server running on http://localhost:3001/sse
 ```
 
 The server indexes documents from `shared/data/` once at startup, then serves
@@ -274,8 +302,9 @@ cat scripts/week-05/demo-02-mcp-with-llm.py
 - When would you use MCP? When would plain REST be simpler?
 - Write a decision heuristic: "Use MCP when ___. Use REST when ___."
 
-### Part D: Cross-language test (optional)
-- If you have Node.js installed, try connecting to the Python MCP server from a Node.js MCP client
+### Part D: Cross-language test
+- The Node.js MCP server (`nodejs/src/mcp_server.js`) exposes the same tools
+- Try connecting a Python MCP client to the Node.js server, or vice versa
 - Does tool discovery work across languages? Does tool calling?
 - This is the promise of MCP — write once, consume anywhere.
 
@@ -285,10 +314,12 @@ cat scripts/week-05/demo-02-mcp-with-llm.py
 
 | Problem | Fix |
 |---------|-----|
-| `ModuleNotFoundError: mcp` | `pip install mcp` — check requirements.txt |
+| `ModuleNotFoundError: mcp` (Python) | `pip install mcp` — check requirements.txt |
+| `ERR_MODULE_NOT_FOUND: @modelcontextprotocol/sdk` (Node.js) | `npm install --legacy-peer-deps` from `nodejs/` |
 | Server starts but client can't connect | Are you using the right transport? stdio vs SSE? |
 | `call_tool` returns error | Check tool name matches exactly (case-sensitive) |
-| Server hangs | Ensure `asyncio.run(main())` is at the bottom of the file |
+| Server hangs | Python: ensure `asyncio.run(main())` at bottom. Node.js: ensure `server.connect()` is called. |
+| MCP tools need LLM access | Ensure `.env` has `OPENROUTER_API_KEY` — tools use the LLM for data synthesis |
 
 ---
 
