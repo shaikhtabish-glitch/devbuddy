@@ -101,7 +101,7 @@ export const getRecentDeploys = tool(
       "Status is one of: 'success', 'failed', 'rolling_back'.",
     schema: z.object({
       service_name: z.string().describe("The name of the service to check"),
-      limit: z.number().optional().default(5).describe("Max number of deploys to return"),
+      limit: z.number().optional().nullable().default(5).describe("Max number of deploys to return"),
     }),
   }
 );
