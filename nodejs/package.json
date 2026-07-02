@@ -1,0 +1,30 @@
+{
+  "name": "devbuddy",
+  "version": "0.1.0",
+  "description": "DevBuddy AI Practitioner Series — Node.js Blueprint",
+  "type": "module",
+  "scripts": {
+    "verify": "node src/verification.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.0",
+    "@langchain/openai": "^0.3.0",
+    "dotenv": "^16.4.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "vitest": "^2.0.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "comments": {
+    "week-3": "npm install @langchain/community chromadb @xenova/transformers",
+    "week-5": "npm install @modelcontextprotocol/sdk",
+    "week-6": "npm install @langchain/langgraph"
+  }
+}
