@@ -10,57 +10,14 @@
 import { readFileSync, readdirSync } from "fs";
 import { resolve, extname, dirname } from "path";
 import { fileURLToPath } from "url";
-import { pipeline } from "@huggingface/transformers";
-import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+import { HuggingFaceTransformersEmbeddings } from "@langchain/community/embeddings/huggingface_transformers";
+import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { Document } from "@langchain/core/documents";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { getLlm } from "./llm.js";
 
 // ─── Config ───────────────────────────────────────────────────
-// ─── Custom Embeddings (no @langchain/community dependency) ─
-
-/**
- * Wraps @huggingface/transformers (Xenova/all-MiniLM-L6-v2) as an
- * embeddings provider compatible with LangChain's QdrantVectorStore.
- * Implements embedQuery() and embedDocuments().
- */
-class LocalEmbeddings {
-  constructor(modelName = "Xenova/all-MiniLM-L6-v2") {
-    this.modelName = modelName;
-    this._extractor = null;
-  }
-
-  async _getExtractor() {
-    if (!this._extractor) {
-      this._extractor = await pipeline("feature-extraction", this.modelName);
-    }
-    return this._extractor;
-  }
-
-  async embedQuery(text) {
-    const extractor = await this._getExtractor();
-    const result = await extractor(text, {
-      pooling: "mean",
-      normalize: true,
-    });
-    return Array.from(result.data);
-  }
-
-  async embedDocuments(texts) {
-    const extractor = await this._getExtractor();
-    const results = [];
-    for (const text of texts) {
-      const result = await extractor(text, {
-        pooling: "mean",
-        normalize: true,
-      });
-      results.push(Array.from(result.data));
-    }
-    return results;
-  }
-}
-
 const EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
 const QDRANT_URL = process.env.QDRANT_URL || "http://localhost:6333";
 const QDRANT_COLLECTION = "devbuddy-docs";
@@ -73,9 +30,11 @@ let _documents = null;
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-function _getEmbeddings() {
+async function _getEmbeddings() {
   if (!_embeddings) {
-    _embeddings = new LocalEmbeddings(EMBEDDING_MODEL);
+    _embeddings = new HuggingFaceTransformersEmbeddings({
+      model: EMBEDDING_MODEL,
+    });
   }
   return _embeddings;
 }
