@@ -9,7 +9,7 @@
  *          from "./llm.js" (getLlm)
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -199,12 +199,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-// ── Entry point ───────────────────────────────────────────────
+// ── Entry point — SSE transport (long-lived daemon) ──────────
 
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("DevBuddy MCP server running on stdio");
+  const app = (await import("express")).default();
+  const PORT = process.env.MCP_PORT || 3001;
+
+  app.get("/sse", async (req, res) => {
+    const transport = new SSEServerTransport("/messages", res);
+    await server.connect(transport);
+  });
+
+  app.post("/messages", async (req, res) => {
+    // SSE transport handles message posting internally
+    res.status(200).end();
+  });
+
+  app.listen(PORT, () => {
+    console.error(`DevBuddy MCP server running on http://localhost:${PORT}/sse`);
+  });
 }
 
 main().catch((err) => {

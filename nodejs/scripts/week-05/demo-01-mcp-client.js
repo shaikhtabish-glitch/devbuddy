@@ -1,15 +1,13 @@
 /**
- * Demo 1: Start the MCP Server
+ * Demo 1: Start the MCP Server (SSE transport)
  *
- * Starts the DevBuddy MCP server on stdio transport.
- * Use the MCP Inspector to connect and test tools:
- *   npx @modelcontextprotocol/inspector node scripts/week-05/demo-01-mcp-client.js
+ * Starts the DevBuddy MCP server on SSE transport (same as Python).
+ * Connect with any MCP client at http://localhost:3001/sse
  *
  * Run: node scripts/week-05/demo-01-mcp-client.js
  */
-console.error("Starting DevBuddy MCP Server...");
-console.error("Use MCP Inspector to connect: npx @modelcontextprotocol/inspector node scripts/week-05/demo-01-mcp-client.js");
+console.error("Starting DevBuddy MCP Server (SSE transport)...");
+console.error("Connect at: http://localhost:3001/sse");
 console.error("");
 
-// Import and run the MCP server
-import "../src/mcp_server.js";
+import("../../src/mcp_server.js");
