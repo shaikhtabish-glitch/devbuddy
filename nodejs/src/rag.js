@@ -101,10 +101,13 @@ export async function indexDocuments(
 
   const emb = await _getEmbeddings();
 
-  // Delete the collection if it exists to ensure a fresh index
+  // Clear the collection points if it exists to ensure a fresh index without recreation conflicts
   const client = new QdrantClient({ url: QDRANT_URL });
   try {
-    await client.deleteCollection(QDRANT_COLLECTION);
+    await client.delete(QDRANT_COLLECTION, {
+      filter: {},
+      wait: true,
+    });
   } catch (e) {
     // Collection might not exist, ignore
   }
