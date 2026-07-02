@@ -6,6 +6,8 @@
 
 ## Setup
 
+### Python
+
 ```bash
 # 1. Pull latest code
 cd devbuddy && git pull upstream main
@@ -21,17 +23,35 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Verify you're ready:
+### Node.js
 
 ```bash
-# Week 2 baseline (8 pure-Pydantic tests)
-python -m pytest tests/test_schemas.py -v -k "not analyze_pr"
+# 1. Pull latest code
+cd devbuddy && git pull upstream main
 
-# Week 3 RAG tests (10 tests — requires embedding model download + Qdrant running)
+# 2. Start Qdrant vector database (required for Week 3+)
+docker-compose up -d
+curl http://localhost:6333/healthz
+
+# 3. Install dependencies
+cd nodejs
+npm install
+```
+
+Verify you're ready:
+
+**Python:**
+
+```bash
 python -m pytest tests/test_rag.py -v
+# 10 tests — requires Qdrant running
+```
 
-# Full suite (21 tests)
-python -m pytest tests/ -v --ignore=tests/test_integration.py
+**Node.js:**
+
+```bash
+npx vitest run tests/test_rag.js
+# 8 tests — requires Qdrant running
 ```
 
 ---
@@ -63,10 +83,13 @@ Open `src/rag.py`. It already contains a full RAG pipeline:
 - `shared/data/CONTRIBUTING.md` — DevBuddy contribution guide (setup, code style, PR process)
 
 ## Demo Scripts
-- `scripts/week-03/demo-01-embed-retrieve-ground.py` — full RAG loop: index → retrieve → answer
-- `scripts/week-03/demo-02-hallucinate-ground.py` — out-of-corpus vs in-corpus (system prompt suppresses hallucination)
-- `scripts/week-03/demo-03-chunk-size.py` — same question across 256, 512, 1024 chunk sizes
-- `scripts/week-03/demo-04-hybrid-search.py` — vector vs BM25+vector side by side
+
+| Demo | Python | Node.js |
+|------|--------|---------|
+| Demo 1: Embed → Retrieve → Ground | `python scripts/week-03/demo-01-embed-retrieve-ground.py` | `node scripts/week-03/demo-01-embed-retrieve-ground.js` |
+| Demo 2: Hallucinate → Ground | `python scripts/week-03/demo-02-hallucinate-ground.py` | `node scripts/week-03/demo-02-hallucinate-ground.js` |
+| Demo 3: Chunk Size 256/512/1024 | `python scripts/week-03/demo-03-chunk-size.py` | `node scripts/week-03/demo-03-chunk-size.js` |
+| Demo 4: Hybrid Search | `python scripts/week-03/demo-04-hybrid-search.py` | `node scripts/week-03/demo-04-hybrid-search.js` |
 
 ---
 
@@ -80,15 +103,20 @@ The moderator will run two demos first (embed+retrieve+ground, then hallucinate+
 
 ### Step 1: Index the document set (10 min)
 
-`src/rag.py` is already implemented. Run the index and explore the code:
+**Python:**
 
 ```python
 from src.rag import index_documents
-
-# Index all .md and .txt files from shared/data/
-# Defaults: chunk_size=512, chunk_overlap=64
 count = index_documents()
 print(f"Indexed {count} chunks")
+```
+
+**Node.js:**
+
+```js
+import { indexDocuments } from "./rag.js";
+const count = await indexDocuments();
+console.log(`Indexed ${count} chunks`);
 ```
 
 **Check:** After running, visit http://localhost:6333/dashboard — you should see the `devbuddy-docs` collection with chunks.
@@ -218,10 +246,12 @@ With 8 documents, the top-5 may be identical. With 50+ docs, BM25 surfaces keywo
 
 | Problem | Fix |
 |---------|-----|
-| `RuntimeError: No index found` | Run `index_documents()` first |
-| `ConnectionError` on Qdrant | `docker-compose up -d` from repo root (or `docker compose up -d`), then `curl localhost:6333/healthz` |
+| `RuntimeError: No index found` | Run `indexDocuments()` / `index_documents()` first |
+| `ConnectionError` on Qdrant | `docker-compose up -d` from repo root, then `curl localhost:6333/healthz` |
 | Embedding model slow first run | ~80MB download. Let it finish. Subsequent runs are instant. |
 | `pip install` fails | Make sure you're in `python/` with `.venv` activated |
+| `npm install` fails | Use `--legacy-peer-deps` flag, or check Node.js >= 20 |
+| `ERR_MODULE_NOT_FOUND: @langchain/qdrant` | Run `npm install` from `nodejs/` to install week-3 deps |
 
 ---
 
