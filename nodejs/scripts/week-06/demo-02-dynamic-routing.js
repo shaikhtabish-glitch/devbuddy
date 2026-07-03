@@ -20,7 +20,7 @@ const queries = [
 for (const q of queries) {
   console.log(`  Query: "${q}"`);
   const result = await runDynamicAgent(q);
-  console.log(`  Report: ${result.report.slice(0, 150)}...`);
+  console.log(`  Report: ${result.report}...`);
   console.log(`  Steps: ${result.steps}, Cost: $${result.cost.toFixed(6)}`);
   console.log();
 }
