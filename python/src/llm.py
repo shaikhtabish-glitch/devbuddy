@@ -1,11 +1,21 @@
 """
-DevBuddy — OpenRouter LLM Client Factory
+DevBuddy - OpenRouter LLM Client Factory
 
 Uses LangChain's ChatOpenAI pointed at OpenRouter.
 One client. Any model. Swap by changing a string.
 """
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+
+# Load python/.env once, at import time, independent of the current working
+# directory. Every module that needs the key imports this file, so this is the
+# single place we read the environment (mirrors the Node.js config.js pattern).
+# Without this, `python src/verification.py` fails with "OPENROUTER_API_KEY not
+# set" even when a valid .env exists.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "openai/gpt-4o-mini"
