@@ -34,6 +34,7 @@ async function ask() {
       console.log(`  Session ended. ${turn} queries, total cost ~$${totalCost.toFixed(6)}`);
       console.log("=".repeat(70));
       rl.close();
+      process.exit(0);
       return;
     }
     if (query.toLowerCase() === "cost") {
