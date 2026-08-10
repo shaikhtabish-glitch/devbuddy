@@ -12,6 +12,8 @@ python/.venv/
 python/.env
 java/.gradle/
 java/build/
+java/target/
+java/dependency-reduced-pom.xml
 nodejs/node_modules/
 nodejs/.env
 
