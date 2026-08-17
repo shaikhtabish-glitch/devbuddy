@@ -12,9 +12,9 @@
 
 ```bash
 cd python
-source .venv/bin/activate
+python install.py                  # one-command setup (prefers uv, falls back to pip)
 git pull upstream main          # get latest code + test data
-pip install -r requirements-dev.txt   # install pytest
+uv pip install -r requirements-dev.txt   # install pytest
 ```
 
 Verify you're ready:

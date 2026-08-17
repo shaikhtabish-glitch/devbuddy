@@ -36,6 +36,26 @@ Each week: `git pull upstream main` to get the latest.
 
 ## Step 3: Set Up Python Environment
 
+**One-command setup (preferred):**
+
+```bash
+cd python
+python install.py
+```
+
+`install.py` creates the venv and installs the Week 0 core dependencies. It
+**prefers `uv`** (fast) and falls back to `python -m venv` + `pip` when uv
+isn't installed.
+
+**Alternative — make (requires uv):**
+
+```bash
+cd python
+make install
+```
+
+**Manual fallback:**
+
 ```bash
 cd python
 python -m venv .venv
@@ -44,6 +64,9 @@ source .venv/bin/activate        # macOS/Linux
 
 pip install -r requirements.txt
 ```
+
+Later weeks install extra deps on demand (see the groups in `requirements.txt`,
+or `uv pip install -e ".[rag]"` etc.). Dev tooling (pytest): `uv pip install -r requirements-dev.txt`.
 
 ---
 
@@ -69,7 +92,8 @@ Change `DEVBUDDY_MODEL` to any OpenRouter model string (`anthropic/claude-sonnet
 ## Step 5: Run the Verification Script
 
 ```bash
-python src/verification.py
+python run.py           # auto-selects uv or the venv
+# or directly: python src/verification.py
 ```
 
 Expected output:
