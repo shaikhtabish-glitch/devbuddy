@@ -85,16 +85,24 @@ public class AppConfig {
         return ChatClient.builder(chatModel).build();
     }
 
+    /** Week 2 — structured output functions (analyzePr + generateReadinessReport). */
+    @Bean
+    public devbuddy.schemas.SchemasService schemasService(ChatClient chatClient) {
+        return new devbuddy.schemas.SchemasService(chatClient, model);
+    }
+
     /** Exposed as a named bean so other components can reference the model name. */
     @Bean
     public String modelName() {
         return model;
     }
 
-    /** Optional alternate model for provider swap tests. */
+    /** Optional alternate model for provider swap tests. Empty string when unset
+     *  (returning null would register a Spring {@code NullBean}, which breaks
+     *  {@code ctx.getBean("modelAlt", String.class)} lookups). */
     @Bean
     public String modelAlt() {
-        return modelAlt;
+        return modelAlt == null ? "" : modelAlt;
     }
 
     /** Exposed for tests that need to create a second client for model swap. */
