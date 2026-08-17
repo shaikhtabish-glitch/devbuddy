@@ -33,7 +33,7 @@ The model is constrained by a schema. It returns a typed object — not prose. Y
 |-------|-----------------|----------|
 | **Prompt engineering** | What the model tries to do | System message = constitution. User message = task. |
 | **Schema constraint** | What shape the output must have | Schema (Pydantic / Zod / JSON schema) + structured output (`with_structured_output` / `withStructuredOutput` / `response_format=json_schema`). |
-| **Inference parameters** | Determinism vs. judgment quality | The schema guarantees **validity** at any temperature. Temperature trades **determinism** (0) against **judgment** (>0). `temp=0` is a reproducibility choice, not a correctness rule. |
+| **Inference parameters** | Cost guard + reproducibility | The schema guarantees **validity** at any temperature. `max_tokens` must fit your schema (truncation breaks the contract); temperature is a minor reproducibility dial. `temp=0` is a reproducibility choice, not a correctness rule. |
 
 ---
 

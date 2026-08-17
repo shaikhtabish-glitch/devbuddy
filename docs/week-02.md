@@ -222,7 +222,7 @@ for (double temp : new double[]{0.0, 0.3, 0.7, 1.0}) {
 
 At temp=0: deterministic. At temp=0.7: summary drifts. At temp=1.0: wider drift.
 
-Key point: the schema guarantees **validity** at every temperature. Temperature controls **judgment** — so `temp=0` is a reproducibility choice (tests, CI, caching), not a correctness requirement.
+Key point: the schema guarantees **validity** at every temperature — so `temp=0` is a minor reproducibility dial (consistent phrasing for tests/CI), not a correctness requirement. The parameter that actually bites is `max_tokens` (truncation, next step).
 
 ---
 
@@ -306,11 +306,11 @@ mvn test -Dtest=SchemasTest
 
 - [ ] Call `analyzePr()` / `analyze_pr()` and get back a typed object — not prose
 - [ ] Delete a field from the schema and see validation reject it
-- [ ] Run at `temperature=0` twice and get the same output
-- [ ] Run at `temperature=0.7` and still get a *valid* typed object — only the wording changes
+- [ ] Run at `temperature=0` twice and get a consistent verdict
+- [ ] Run at `temperature=1.0` twice and still get a *valid* typed object both times — only the phrasing drifts
 - [ ] Set maxTokens low enough to trigger a truncation error
 - [ ] Explain: *"Raw JSON prompting is a request. Schema-constrained output is a contract."*
-- [ ] Explain: *"The schema guarantees validity; temperature controls judgment. Valid JSON is step one — the right JSON is step two."*
+- [ ] Explain: *"The schema guarantees validity at any temperature; `max_tokens` (truncation) is the parameter that bites. Valid JSON is step one — the right JSON is step two."*
 
 ---
 
