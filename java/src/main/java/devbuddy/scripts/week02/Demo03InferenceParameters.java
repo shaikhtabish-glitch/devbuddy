@@ -6,14 +6,14 @@ import devbuddy.service.SchemasService;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 /**
- * Week 2 — Demo 4: Inference Parameters (temperature + max_tokens).
+ * Week 2 — Demo 3: Inference Parameters (temperature + max_tokens).
  *
  * <p>Same PR. Same schema. Vary temperature and maxTokens to show what changes
  * (judgment) and what holds (validity — the contract).</p>
  *
- * <p>Run: {@code mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week02.Demo04InferenceParameters}</p>
+ * <p>Run: {@code mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week02.Demo03InferenceParameters}</p>
  */
-public class Demo04InferenceParameters {
+public class Demo03InferenceParameters {
 
     private static final String PR_TITLE = "Consolidate error handling across user profile module";
     private static final String PR_DIFF = """
