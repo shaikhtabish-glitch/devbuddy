@@ -1,5 +1,6 @@
 package devbuddy.config;
 
+import devbuddy.service.SchemasService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -87,8 +88,8 @@ public class AppConfig {
 
     /** Week 2 — structured output functions (analyzePr + generateReadinessReport). */
     @Bean
-    public devbuddy.schemas.SchemasService schemasService(ChatClient chatClient) {
-        return new devbuddy.schemas.SchemasService(chatClient, model);
+    public SchemasService schemasService(ChatClient chatClient) {
+        return new SchemasService(chatClient, model);
     }
 
     /** Exposed as a named bean so other components can reference the model name. */

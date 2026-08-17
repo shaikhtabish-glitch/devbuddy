@@ -58,12 +58,12 @@ print()
 #      (follow the healthy example that's already there)
 #
 # PART B — LLM integration:
-#   Use src.schemas.generate_readiness_report() to feed
+#   Use src.llm_functions.generate_readiness_report() to feed
 #   the mock data to the LLM and get back a typed report.
 #   Example:
 #
 #     import json
-#     from src.schemas import generate_readiness_report
+#     from src.llm_functions import generate_readiness_report
 #
 #     with open('../shared/data/service-readiness-healthy.json') as f:
 #         data = json.load(f)

@@ -7,7 +7,7 @@
  * Run: node scripts/week-02/demo-03-inference-parameters.js
  */
 import { HumanMessage } from "@langchain/core/messages";
-import { analyzePr } from "../../src/schemas.js";
+import { analyzePr } from "../../src/llm_functions.js";
 import { getLlm } from "../../src/llm.js";
 import { calculateCost } from "../../src/config.js";
 

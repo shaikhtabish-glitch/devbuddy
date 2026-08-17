@@ -3,10 +3,11 @@ import json
 import pytest
 from pydantic import ValidationError
 from src.schemas import (
-    BuildCheck, analyze_pr,
+    BuildCheck,
     ServiceReadinessReport, ServiceInfo, BuildStatus,
     DeployRecord, DeploymentInfo, EvidenceChunk, ReadinessVerdict,
 )
+from src.llm_functions import analyze_pr
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -63,14 +64,6 @@ def test_analyze_pr_with_sample_data():
         diff = f.read()
     result = analyze_pr(title="Fix login redirect loop in auth-service", diff=diff, temperature=0.0)
     assert isinstance(result, BuildCheck)
-
-
-def test_schemas_imports_llm():
-    """schemas.py imports from llm.py — the import graph holds."""
-    from src.schemas import analyze_pr
-    import inspect
-    source = inspect.getsource(analyze_pr)
-    assert "get_llm" in source, "analyze_pr should call get_llm() from src.llm"
 
 
 # ═══════════════════════════════════════════════════════════════

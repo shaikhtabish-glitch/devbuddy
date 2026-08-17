@@ -3,7 +3,7 @@ package devbuddy.scripts.week02;
 import devbuddy.config.AppConfig;
 import devbuddy.schemas.BuildCheck;
 import devbuddy.schemas.Json;
-import devbuddy.schemas.SchemasService;
+import devbuddy.service.SchemasService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 

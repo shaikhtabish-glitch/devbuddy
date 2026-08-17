@@ -37,7 +37,11 @@ const required = (key) => {
 // ── Config object — the single source of truth ───────────────
 export const config = {
   // LLM Provider
-  openRouterApiKey: required("OPENROUTER_API_KEY"),
+  // Lazy getter: validate only when actually used, so importing config.js
+  // (e.g. from pure schema tests) doesn't require an API key.
+  get openRouterApiKey() {
+    return required("OPENROUTER_API_KEY");
+  },
   model: get("DEVBUDDY_MODEL", "openai/gpt-4o-mini"),
   modelAlt: get("DEVBUDDY_MODEL_ALT", null),  // optional, for model swap tests
   openRouterBaseUrl: "https://openrouter.ai/api/v1",

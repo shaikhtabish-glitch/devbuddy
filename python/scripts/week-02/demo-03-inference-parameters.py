@@ -10,7 +10,7 @@ import os, sys, time, warnings
 warnings.filterwarnings("ignore", message=".*Pydantic serializer.*")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.schemas import analyze_pr
+from src.llm_functions import analyze_pr
 from src.llm import get_llm
 
 PR_TITLE = "Consolidate error handling across user profile module"

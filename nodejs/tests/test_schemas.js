@@ -10,8 +10,8 @@ import {
   BuildCheckSchema,
   ServiceReadinessReportSchema,
   DeployRecordSchema,
-  analyzePr,
 } from "../src/schemas.js";
+import { analyzePr } from "../src/llm_functions.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = resolve(__dirname, "..", "..", "shared", "data");

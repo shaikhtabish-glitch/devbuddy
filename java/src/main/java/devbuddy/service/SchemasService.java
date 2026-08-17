@@ -1,5 +1,9 @@
-package devbuddy.schemas;
+package devbuddy.service;
 
+import devbuddy.schemas.BuildCheck;
+import devbuddy.schemas.Json;
+import devbuddy.schemas.JsonSchemas;
+import devbuddy.schemas.ServiceReadinessReport;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.openai.OpenAiChatOptions;

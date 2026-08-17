@@ -2,7 +2,7 @@ package devbuddy;
 
 import devbuddy.config.AppConfig;
 import devbuddy.schemas.BuildCheck;
-import devbuddy.schemas.SchemasService;
+import devbuddy.service.SchemasService;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
