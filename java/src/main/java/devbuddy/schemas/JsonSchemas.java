@@ -25,14 +25,16 @@ public final class JsonSchemas {
             {
               "type": "object",
               "properties": {
-                "project": { "type": "string" },
+                "project": { "type": "string", "description": "Project or service name" },
                 "severity": {
                   "type": "string",
+                  "description": "How urgent is this change?",
                   "enum": ["low", "medium", "high", "critical"]
                 },
-                "summary": { "type": "string" },
+                "summary": { "type": "string", "description": "One-sentence summary of the change" },
                 "affected_files": {
                   "type": "array",
+                  "description": "Files modified by this change",
                   "items": { "type": "string" }
                 }
               },
@@ -48,9 +50,9 @@ public final class JsonSchemas {
                 "service": {
                   "type": "object",
                   "properties": {
-                    "name": { "type": "string" },
-                    "version": { "type": "string" },
-                    "owner_team": { "type": "string" }
+                    "name": { "type": "string", "description": "Service name, e.g. 'auth-service'" },
+                    "version": { "type": "string", "description": "Currently deployed version, e.g. '2.1.0'" },
+                    "owner_team": { "type": "string", "description": "Team responsible for this service" }
                   },
                   "required": ["name", "version", "owner_team"],
                   "additionalProperties": false
@@ -60,10 +62,11 @@ public final class JsonSchemas {
                   "properties": {
                     "status": {
                       "type": "string",
+                      "description": "Current build/health status",
                       "enum": ["healthy", "degraded", "down", "unknown"]
                     },
-                    "last_deploy": { "type": "string" },
-                    "failing_since": { "type": ["string", "null"] }
+                    "last_deploy": { "type": "string", "description": "ISO timestamp of the most recent deployment" },
+                    "failing_since": { "type": ["string", "null"], "description": "ISO timestamp of when the build started failing, if degraded or down" }
                   },
                   "required": ["status", "last_deploy", "failing_since"],
                   "additionalProperties": false
@@ -73,14 +76,16 @@ public final class JsonSchemas {
                   "properties": {
                     "recent_deploys": {
                       "type": "array",
+                      "description": "Last N deployments, most recent first",
                       "items": {
                         "type": "object",
                         "properties": {
-                          "sha": { "type": "string" },
-                          "author": { "type": "string" },
-                          "timestamp": { "type": "string" },
+                          "sha": { "type": "string", "description": "Commit SHA of the deployment" },
+                          "author": { "type": "string", "description": "Engineer who triggered the deploy" },
+                          "timestamp": { "type": "string", "description": "ISO timestamp of the deployment" },
                           "status": {
                             "type": "string",
+                            "description": "Outcome of this deployment",
                             "enum": ["success", "failed", "rolling_back"]
                           }
                         },
@@ -90,6 +95,7 @@ public final class JsonSchemas {
                     },
                     "active_incidents": {
                       "type": "array",
+                      "description": "IDs or summaries of any active incidents",
                       "items": { "type": "string" }
                     }
                   },
@@ -99,17 +105,20 @@ public final class JsonSchemas {
                 "verdict": {
                   "type": "object",
                   "properties": {
-                    "ready": { "type": "boolean" },
+                    "ready": { "type": "boolean", "description": "True if the service can proceed to the target version" },
                     "confidence": {
                       "type": "string",
+                      "description": "How confident is this verdict?",
                       "enum": ["low", "medium", "high"]
                     },
                     "blockers": {
                       "type": "array",
+                      "description": "Reasons the service is NOT ready. Empty if ready=true.",
                       "items": { "type": "string" }
                     },
                     "recommended_next_steps": {
                       "type": "array",
+                      "description": "What to do next — regardless of ready/blocked",
                       "items": { "type": "string" }
                     }
                   },
@@ -123,10 +132,11 @@ public final class JsonSchemas {
                     "properties": {
                       "source": {
                         "type": "string",
+                        "description": "Where this evidence came from — RAG retrieval, tool output, or user query",
                         "enum": ["rag", "tool", "user"]
                       },
-                      "content": { "type": "string" },
-                      "relevance_score": { "type": ["number", "null"] }
+                      "content": { "type": "string", "description": "The evidence content" },
+                      "relevance_score": { "type": ["number", "null"], "description": "0.0–1.0 relevance score from the retriever, if sourced from RAG" }
                     },
                     "required": ["source", "content", "relevance_score"],
                     "additionalProperties": false

@@ -45,6 +45,8 @@ public class Demo03InferenceParameters {
             }
             System.out.println();
             System.out.println("  Key: json_schema guarantees VALIDITY. Temperature controls JUDGMENT.");
+            System.out.println("  So temp=0 is a reproducibility choice (tests, caching, CI) —");
+            System.out.println("  not a correctness requirement. The schema is what guarantees validity.");
             System.out.println();
 
             // ── Part 2: max_tokens — truncation kills structured output ──

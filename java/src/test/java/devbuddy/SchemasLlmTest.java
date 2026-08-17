@@ -65,6 +65,21 @@ class SchemasLlmTest {
     }
 
     @Test
+    @DisplayName("is valid at high temperature (schema = validity, temperature = judgment)")
+    void validAtHighTemperature() {
+        String diff = "Fix login bug\n\nChanged auth.py line 42";
+        BuildCheck result = schemas.analyzePr("Fix login bug", diff, 0.7, null);
+
+        assertNotNull(result, "Expected BuildCheck at temp=0.7, got null");
+        assertNotNull(result.project(), "project field is empty");
+        assertTrue(java.util.List.of("low", "medium", "high", "critical")
+                        .contains(result.severity().value()),
+                "Invalid severity: " + result.severity());
+        assertNotNull(result.summary(), "summary field is empty");
+        assertFalse(result.affectedFiles().isEmpty(), "affected_files is empty");
+    }
+
+    @Test
     @DisplayName("works with the sample diff from shared/data")
     void worksWithSampleDiff() throws Exception {
         String diff = Files.readString(Path.of("../shared/data/sample-diff.txt"));

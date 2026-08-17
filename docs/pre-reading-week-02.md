@@ -32,14 +32,14 @@ The model is constrained by a schema. It returns a typed object — not prose. Y
 | Lever | What it controls | The rule |
 |-------|-----------------|----------|
 | **Prompt engineering** | What the model tries to do | System message = constitution. User message = task. |
-| **Schema constraint** | What shape the output must have | Schema (Pydantic / Zod) + structured output (`with_structured_output` / `withStructuredOutput`). |
+| **Schema constraint** | What shape the output must have | Schema (Pydantic / Zod / JSON schema) + structured output (`with_structured_output` / `withStructuredOutput` / `response_format=json_schema`). |
 | **Inference parameters** | Determinism vs. judgment quality | The schema guarantees **validity** at any temperature. Temperature trades **determinism** (0) against **judgment** (>0). `temp=0` is a reproducibility choice, not a correctness rule. |
 
 ---
 
 ## What You'll Build Today
 
-Open `src/schemas.py`. It already contains two schema families:
+Open `src/schemas.py` (Python), `src/schemas.js` (Node.js), or `schemas/JsonSchemas.java` (Java). It already contains two schema families:
 
 - **`BuildCheck`** — a flat 4-field model for PR analysis. This is the in-session exercise. You'll reproduce it, break it, vary temperature, and add few-shot examples.
 - **`ServiceReadinessReport`** — a composed schema with 5 nested models, `Optional` fields, and cross-field validators. This is what DevBuddy produces at Week 7. You'll explore it during self-learning with mock data (no API calls needed).
@@ -62,6 +62,11 @@ python scripts/week-02/explore-readiness-report.py
 **Node.js:**
 ```bash
 node scripts/week-02/explore-readiness-report.js
+```
+
+**Java:**
+```bash
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week02.ExploreReadinessReport
 ```
 
 It loads mock JSON scenarios and validates them against `ServiceReadinessReport`. You'll see nested models, optional fields, and cross-field validators in action — before you write a single line of code. Ask yourself: *"How would I build this schema? What would break if I changed field types?"*
