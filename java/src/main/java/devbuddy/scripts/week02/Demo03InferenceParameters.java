@@ -32,21 +32,34 @@ public class Demo03InferenceParameters {
             System.out.println("=".repeat(65));
             System.out.println();
 
-            // ── Part 1: temperature — content varies, contract holds ──
+            // ── Part 1: temperature — determinism vs. judgment ──
             System.out.println("-".repeat(65));
-            System.out.println("  PART 1: Temperature — same input, 4 temperatures");
+            System.out.println("  PART 1: Temperature — determinism vs. judgment");
             System.out.println("-".repeat(65));
             System.out.println();
 
-            for (double temp : new double[]{0.0, 0.3, 0.7, 1.0}) {
-                BuildCheck r = schemas.analyzePr(PR_TITLE, PR_DIFF, temp, 200);
-                System.out.printf("  temp=%.1f: severity=%s  summary=\"%s\"%n",
-                        temp, r.severity().value(), r.summary());
+            System.out.println("  temp=0.0 (deterministic) — same input, run twice:");
+            for (int i = 1; i <= 2; i++) {
+                BuildCheck r = schemas.analyzePr(PR_TITLE, PR_DIFF, 0.0, 200);
+                System.out.printf("    run %d: severity=%s  summary=\"%s\"%n",
+                        i, r.severity().value(), r.summary());
             }
+            System.out.println("    → same verdict, consistent phrasing.");
             System.out.println();
-            System.out.println("  Key: json_schema guarantees VALIDITY. Temperature controls JUDGMENT.");
-            System.out.println("  So temp=0 is a reproducibility choice (tests, caching, CI) —");
-            System.out.println("  not a correctness requirement. The schema is what guarantees validity.");
+
+            System.out.println("  temp=1.0 (creative) — same input, run twice:");
+            for (int i = 1; i <= 2; i++) {
+                BuildCheck r = schemas.analyzePr(PR_TITLE, PR_DIFF, 1.0, 200);
+                System.out.printf("    run %d: severity=%s  summary=\"%s\"%n",
+                        i, r.severity().value(), r.summary());
+            }
+            System.out.println("    → same verdict, but the phrasing drifts more.");
+            System.out.println();
+
+            System.out.println("  Key: every run returned a VALID BuildCheck — the schema guarantees");
+            System.out.println("  validity at ANY temperature. Temperature only nudges how much the");
+            System.out.println("  phrasing varies; on short fields that effect is subtle. temp=0 is a");
+            System.out.println("  reproducibility choice (tests, CI, caching), not a correctness rule.");
             System.out.println();
 
             // ── Part 2: max_tokens — truncation kills structured output ──

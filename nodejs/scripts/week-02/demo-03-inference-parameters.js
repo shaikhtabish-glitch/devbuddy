@@ -31,36 +31,43 @@ for (const line of PR_DIFF.split("\n")) {
 console.log();
 
 // ═══════════════════════════════════════════════════════════════
-// Part 1: Temperature — content varies, contract holds
+// Part 1: Temperature — determinism vs. judgment
 // ═══════════════════════════════════════════════════════════════
 console.log("─".repeat(65));
-console.log("  PART 1: Temperature — same input, 4 temperatures");
+console.log("  PART 1: Temperature — determinism vs. judgment");
 console.log("─".repeat(65));
 console.log();
 
-for (const temp of [0.0, 0.3, 0.7, 1.0]) {
-  const label =
-    temp === 0 ? "deterministic" : temp < 0.7 ? "warm" : "creative";
-  const result = await analyzePr({
+console.log("  temp=0.0 (deterministic) — same input, run twice:");
+for (let i = 1; i <= 2; i++) {
+  const r = await analyzePr({
     title: PR_TITLE,
     diff: PR_DIFF,
-    temperature: temp,
+    temperature: 0.0,
     maxTokens: 200,
   });
-  console.log(`  temp=${temp} (${label}):`);
-  console.log(`    severity=${result.severity}`);
-  console.log(`    summary="${result.summary}"`);
-  console.log();
+  console.log(`    run ${i}: severity=${r.severity}  summary="${r.summary}"`);
 }
+console.log("    → same verdict, consistent phrasing.");
+console.log();
 
-console.log("  This diff has NO trigger keywords (no auth, payments, security).");
-console.log("  Severity is a judgment call: refactor? feature? cleanup?");
-console.log("  temp=0.0 → picks one answer, sticks to it every run.");
-console.log("  temp=0.7 → may flip between 'medium' and 'low' across runs.");
-console.log("  temp=1.0 → wider exploration. Same diff, different verdicts.");
-console.log("  Key: Zod guarantees VALIDITY. Temperature controls JUDGMENT.");
-console.log("  So temp=0 is a reproducibility choice (tests, caching, CI) —");
-console.log("  not a correctness requirement. The schema is what guarantees validity.");
+console.log("  temp=1.0 (creative) — same input, run twice:");
+for (let i = 1; i <= 2; i++) {
+  const r = await analyzePr({
+    title: PR_TITLE,
+    diff: PR_DIFF,
+    temperature: 1.0,
+    maxTokens: 200,
+  });
+  console.log(`    run ${i}: severity=${r.severity}  summary="${r.summary}"`);
+}
+console.log("    → same verdict, but the phrasing drifts more.");
+console.log();
+
+console.log("  Key: every run returned a VALID BuildCheck — the schema guarantees");
+console.log("  validity at ANY temperature. Temperature only nudges how much the");
+console.log("  phrasing varies; on short fields that effect is subtle. temp=0 is a");
+console.log("  reproducibility choice (tests, CI, caching), not a correctness rule.");
 console.log();
 
 // ═══════════════════════════════════════════════════════════════

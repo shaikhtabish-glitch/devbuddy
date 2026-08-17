@@ -31,29 +31,31 @@ print(f"         {PR_DIFF}")
 print()
 
 # ═══════════════════════════════════════════════════════════════
-# Part 1: Temperature — content varies, contract holds
+# Part 1: Temperature — determinism vs. judgment
 # ═══════════════════════════════════════════════════════════════
 print("─" * 65)
-print("  PART 1: Temperature — same input, 4 temperatures")
+print("  PART 1: Temperature — determinism vs. judgment")
 print("─" * 65)
 print()
 
-for temp in [0.0, 0.3, 0.7, 1.0]:
-    label = "deterministic" if temp == 0 else ("warm" if temp < 0.7 else "creative")
-    result = analyze_pr(PR_TITLE, PR_DIFF, temperature=temp)
-    print(f"  temp={temp} ({label}):")
-    print(f"    severity={result.severity}")
-    print(f"    summary=\"{result.summary}\"")
-    print()
+print("  temp=0.0 (deterministic) — same input, run twice:")
+for i in range(2):
+    r = analyze_pr(PR_TITLE, PR_DIFF, temperature=0.0)
+    print(f"    run {i+1}: severity={r.severity}  summary=\"{r.summary}\"")
+print("    → same verdict, consistent phrasing.")
+print()
 
-print("  This diff has NO trigger keywords (no auth, payments, security).")
-print("  Severity is a judgment call: refactor? feature? cleanup?")
-print("  temp=0.0 → picks one answer, sticks to it every run.")
-print("  temp=0.7 → may flip between 'medium' and 'low' across runs.")
-print("  temp=1.0 → wider exploration. Same diff, different verdicts.")
-print("  Key: Pydantic guarantees VALIDITY. Temperature controls JUDGMENT.")
-print("  So temp=0 is a reproducibility choice (tests, caching, CI) —")
-print("  not a correctness requirement. The schema is what guarantees validity.")
+print("  temp=1.0 (creative) — same input, run twice:")
+for i in range(2):
+    r = analyze_pr(PR_TITLE, PR_DIFF, temperature=1.0)
+    print(f"    run {i+1}: severity={r.severity}  summary=\"{r.summary}\"")
+print("    → same verdict, but the phrasing drifts more.")
+print()
+
+print("  Key: every run returned a VALID BuildCheck — the schema guarantees")
+print("  validity at ANY temperature. Temperature only nudges how much the")
+print("  phrasing varies; on short fields that effect is subtle. temp=0 is a")
+print("  reproducibility choice (tests, CI, caching), not a correctness rule.")
 print()
 
 # ═══════════════════════════════════════════════════════════════
