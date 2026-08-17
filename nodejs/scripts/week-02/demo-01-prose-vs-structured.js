@@ -1,9 +1,10 @@
 /**
- * Demo 1: Prose → crash, then Schema → success.
+ * Demo 1: Unstructured request → crash, then Schema → guaranteed.
  *
- * The moderator's "Demo 1": call the LLM with a plain prompt and get prose
- * back, feed that prose to JSON.parse() → crash. Then add a schema constraint
- * (analyzePr) and get a typed object back.
+ * The moderator's "Demo 1": ask the LLM for the fields you want — but with NO
+ * schema. The model gives you those fields back as prose, so JSON.parse()
+ * crashes. Then add a schema constraint (analyzePr) and get a typed object
+ * that ALWAYS parses. A request is not a contract.
  *
  * Run: node scripts/week-02/demo-01-prose-vs-structured.js
  */
@@ -33,14 +34,16 @@ console.log();
 // Step 1: plain prompt → prose
 // ═══════════════════════════════════════════════════════════════
 console.log("-".repeat(70));
-console.log("  STEP 1: plain prompt → prose");
+console.log("  STEP 1: ask for the fields (no schema) → prose");
 console.log("-".repeat(70));
 console.log();
 
 const llm = getLlm({ temperature: 0.0 });
 const raw = (
   await llm.invoke([
-    new HumanMessage(`Summarize this PR: ${PR_TITLE}\n\n${PR_DIFF}`),
+    new HumanMessage(
+      `Analyze this PR and return its severity, a one-sentence summary, and the affected files.\n\nPR Title: ${PR_TITLE}\n\nDiff:\n${PR_DIFF}`
+    ),
   ])
 ).content;
 
@@ -64,7 +67,10 @@ try {
 } catch (e) {
   console.log(`  ❌ CRASHED: ${e.message}`);
   console.log();
-  console.log("  This is code slop. Free text breaks pipelines. Let's fix it.");
+  console.log("  You asked for the severity, summary, and affected files.");
+  console.log("  The model gave them to you — as prose. With no schema,");
+  console.log("  the model picks the format, and it picked prose.");
+  console.log("  Free text breaks pipelines. Let's fix it.");
 }
 console.log();
 

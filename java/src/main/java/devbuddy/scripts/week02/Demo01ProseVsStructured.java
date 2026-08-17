@@ -8,11 +8,12 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 /**
- * Week 2 — Demo 1: Prose → crash, then Schema → success.
+ * Week 2 — Demo 1: Unstructured request → crash, then Schema → guaranteed.
  *
- * <p>The moderator's "Demo 1": call the LLM with a plain prompt and get prose
- * back, feed that prose to {@code Json.parse()} → crash. Then add a schema
- * constraint (analyzePr) and get a typed record back.</p>
+ * <p>The moderator's "Demo 1": ask the LLM for the fields you want — but with
+ * NO schema. The model gives you those fields back as prose, so parsing crashes.
+ * Then add a schema constraint (analyzePr) and get a typed record that ALWAYS
+ * parses. A request is not a contract.</p>
  *
  * <p>Run: {@code mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week02.Demo01ProseVsStructured}</p>
  */
@@ -40,14 +41,16 @@ public class Demo01ProseVsStructured {
             }
             System.out.println();
 
-            // ── Step 1: plain prompt → prose ──────────────────────
+            // ── Step 1: ask for the fields (no schema) → prose ──────
             System.out.println("-".repeat(70));
-            System.out.println("  STEP 1: plain prompt → prose");
+            System.out.println("  STEP 1: ask for the fields (no schema) → prose");
             System.out.println("-".repeat(70));
             System.out.println();
 
             String raw = chatClient.prompt()
-                    .user("Summarize this PR: " + PR_TITLE + "\n\n" + PR_DIFF)
+                    .user("Analyze this PR and return its severity, a one-sentence summary, "
+                            + "and the affected files.\n\n"
+                            + "PR Title: " + PR_TITLE + "\n\nDiff:\n" + PR_DIFF)
                     .call()
                     .chatResponse().getResult().getOutput().getText();
 
@@ -69,7 +72,10 @@ public class Demo01ProseVsStructured {
             } catch (RuntimeException e) {
                 System.out.println("  ❌ CRASHED: " + e.getMessage());
                 System.out.println();
-                System.out.println("  This is code slop. Free text breaks pipelines. Let's fix it.");
+                System.out.println("  You asked for the severity, summary, and affected files.");
+                System.out.println("  The model gave them to you — as prose. With no schema,");
+                System.out.println("  the model picks the format, and it picked prose.");
+                System.out.println("  Free text breaks pipelines. Let's fix it.");
             }
             System.out.println();
 

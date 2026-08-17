@@ -1,9 +1,10 @@
 """
-Demo 1: Prose → crash, then Schema → success.
+Demo 1: Unstructured request → crash, then Schema → guaranteed.
 
-The moderator's "Demo 1": call the LLM with a plain prompt and get prose back,
-feed that prose to json.loads() → crash. Then add a schema constraint
-(analyze_pr) and get a typed object back.
+The moderator's "Demo 1": ask the LLM for the fields you want — but with NO
+schema. The model gives you those fields back as prose, so json.loads() crashes.
+Then add a schema constraint (analyze_pr) and get a typed object that ALWAYS
+parses. A request is not a contract.
 
 Run: python scripts/week-02/demo-01-prose-vs-structured.py
 """
@@ -40,12 +41,16 @@ print()
 # Step 1: plain prompt → prose
 # ═══════════════════════════════════════════════════════════════
 print("-" * 70)
-print("  STEP 1: plain prompt → prose")
+print("  STEP 1: ask for the fields (no schema) → prose")
 print("-" * 70)
 print()
 
 llm = get_llm(temperature=0.0)
-raw = llm.invoke([HumanMessage(content=f"Summarize this PR: {PR_TITLE}\n\n{PR_DIFF}")]).content
+raw = llm.invoke([HumanMessage(content=(
+    f"Analyze this PR and return its severity, a one-sentence summary, "
+    f"and the affected files.\n\n"
+    f"PR Title: {PR_TITLE}\n\nDiff:\n{PR_DIFF}"
+))]).content
 
 print("  Raw response:")
 for line in raw.strip().split("\n"):
@@ -66,7 +71,10 @@ try:
 except json.JSONDecodeError as e:
     print(f"  ❌ CRASHED: {e}")
     print()
-    print("  This is code slop. Free text breaks pipelines. Let's fix it.")
+    print("  You asked for the severity, summary, and affected files.")
+    print("  The model gave them to you — as prose. With no schema,")
+    print("  the model picks the format, and it picked prose.")
+    print("  Free text breaks pipelines. Let's fix it.")
 print()
 
 # ═══════════════════════════════════════════════════════════════
