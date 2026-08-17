@@ -42,7 +42,7 @@ npx vitest run tests/test_schemas.js -t "ServiceReadinessReport|BuildCheck"
 # 11 tests passing (pure Zod — no API calls, instant)
 
 npx vitest run tests/test_schemas.js
-# All 14 tests — includes 3 that call OpenRouter (requires API key)
+# All 15 tests — includes 4 that call OpenRouter (requires API key)
 ```
 
 ---

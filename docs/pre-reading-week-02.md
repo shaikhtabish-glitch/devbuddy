@@ -32,7 +32,7 @@ The model is constrained by a schema. It returns a typed object — not prose. Y
 | Lever | What it controls | The rule |
 |-------|-----------------|----------|
 | **Prompt engineering** | What the model tries to do | System message = constitution. User message = task. |
-| **Schema constraint** | What shape the output must have | Pydantic model + `with_structured_output()`. |
+| **Schema constraint** | What shape the output must have | Schema (Pydantic / Zod) + structured output (`with_structured_output` / `withStructuredOutput`). |
 | **Inference parameters** | Determinism vs. judgment quality | The schema guarantees **validity** at any temperature. Temperature trades **determinism** (0) against **judgment** (>0). `temp=0` is a reproducibility choice, not a correctness rule. |
 
 ---

@@ -40,7 +40,7 @@ console.log();
 
 for (const temp of [0.0, 0.3, 0.7, 1.0]) {
   const label =
-    temp === 0 ? "production" : temp < 0.7 ? "warm" : "creative";
+    temp === 0 ? "deterministic" : temp < 0.7 ? "warm" : "creative";
   const result = await analyzePr({
     title: PR_TITLE,
     diff: PR_DIFF,
@@ -59,6 +59,8 @@ console.log("  temp=0.0 → picks one answer, sticks to it every run.");
 console.log("  temp=0.7 → may flip between 'medium' and 'low' across runs.");
 console.log("  temp=1.0 → wider exploration. Same diff, different verdicts.");
 console.log("  Key: Zod guarantees VALIDITY. Temperature controls JUDGMENT.");
+console.log("  So temp=0 is a reproducibility choice (tests, caching, CI) —");
+console.log("  not a correctness requirement. The schema is what guarantees validity.");
 console.log();
 
 // ═══════════════════════════════════════════════════════════════
@@ -117,8 +119,7 @@ for (const temp of [0.0, 0.7]) {
 
 console.log();
 console.log("  temp=0.0 vs temp=0.7 — cost is similar.");
-console.log("  The architectural choice isn't about saving tokens here.");
-console.log("  It's about deterministic contracts vs creative exploration.");
+console.log("  The choice isn't about saving tokens — it's determinism vs judgment.");
 console.log();
 console.log("=".repeat(65));
 console.log("  Inference parameters are architectural decisions, not knobs.");
