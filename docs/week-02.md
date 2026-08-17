@@ -95,7 +95,8 @@ Open `src/schemas.py` (Python), `src/schemas.js` (Node.js), or `schemas/JsonSche
 |--------|---------|------------------------------------------------------------------|
 | `python scripts/week-02/demo-01-prose-vs-structured.py` | `node scripts/week-02/demo-01-prose-vs-structured.js` | `devbuddy.scripts.week02.Demo01ProseVsStructured` |
 | `python scripts/week-02/demo-02-raw-vs-pydantic.py` | `node scripts/week-02/demo-02-raw-vs-zod.js` | `devbuddy.scripts.week02.Demo02RawVsStructured` |
-| `python scripts/week-02/demo-03-inference-parameters.py` | `node scripts/week-02/demo-03-inference-parameters.js` | `devbuddy.scripts.week02.Demo03InferenceParameters` |
+| `python scripts/week-02/demo-03-few-shot.py` | `node scripts/week-02/demo-03-few-shot.js` | `devbuddy.scripts.week02.Demo03FewShot` |
+| `python scripts/week-02/demo-04-inference-parameters.py` | `node scripts/week-02/demo-04-inference-parameters.js` | `devbuddy.scripts.week02.Demo04InferenceParameters` |
 | `python scripts/week-02/explore-readiness-report.py` | `node scripts/week-02/explore-readiness-report.js` | `devbuddy.scripts.week02.ExploreReadinessReport` |
 
 ---
@@ -280,7 +281,8 @@ At 200: works. At 10: guaranteed to fail. **maxTokens is a cost guard — set it
 
 ```bash
 python scripts/week-02/explore-readiness-report.py
-python scripts/week-02/demo-03-inference-parameters.py
+python scripts/week-02/demo-03-few-shot.py
+python scripts/week-02/demo-04-inference-parameters.py
 python -m pytest tests/test_schemas.py -v -k "not analyze_pr"
 ```
 
@@ -288,7 +290,8 @@ python -m pytest tests/test_schemas.py -v -k "not analyze_pr"
 
 ```bash
 node scripts/week-02/explore-readiness-report.js
-node scripts/week-02/demo-03-inference-parameters.js
+node scripts/week-02/demo-03-few-shot.js
+node scripts/week-02/demo-04-inference-parameters.js
 npx vitest run tests/test_schemas.js -t "ServiceReadinessReport|BuildCheck"
 ```
 
@@ -296,7 +299,8 @@ npx vitest run tests/test_schemas.js -t "ServiceReadinessReport|BuildCheck"
 
 ```bash
 mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week02.ExploreReadinessReport
-mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week02.Demo03InferenceParameters
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week02.Demo03FewShot
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week02.Demo04InferenceParameters
 mvn test -Dtest=SchemasTest
 ```
 
