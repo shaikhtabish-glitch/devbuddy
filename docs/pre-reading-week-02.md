@@ -23,6 +23,8 @@ output: BuildCheck(project="auth-service", severity="high", summary="...", affec
 
 The model is constrained by a schema. It returns a typed object — not prose. Your code imports it directly. No regex. No `try/except json.loads()`. No hoping.
 
+**The ladder** (fragile → reliable): prompt + parse → JSON mode → **structured output** (this week) → function calling (Week 4). Structured output is the first rung that guarantees *fields*, not just syntax.
+
 ---
 
 ## The Three Levers
@@ -31,7 +33,7 @@ The model is constrained by a schema. It returns a typed object — not prose. Y
 |-------|-----------------|----------|
 | **Prompt engineering** | What the model tries to do | System message = constitution. User message = task. |
 | **Schema constraint** | What shape the output must have | Pydantic model + `with_structured_output()`. |
-| **Inference parameters** | How deterministic the output is | `temperature=0` for structured output. |
+| **Inference parameters** | Determinism vs. judgment quality | The schema guarantees **validity** at any temperature. Temperature trades **determinism** (0) against **judgment** (>0). `temp=0` is a reproducibility choice, not a correctness rule. |
 
 ---
 
@@ -42,9 +44,9 @@ Open `src/schemas.py`. It already contains two schema families:
 - **`BuildCheck`** — a flat 4-field model for PR analysis. This is the in-session exercise. You'll reproduce it, break it, vary temperature, and add few-shot examples.
 - **`ServiceReadinessReport`** — a composed schema with 5 nested models, `Optional` fields, and cross-field validators. This is what DevBuddy produces at Week 7. You'll explore it during self-learning with mock data (no API calls needed).
 
-The demo scripts in `scripts/week-02/` show why this matters — free-text crashes a parser, structured output saves it. The "request vs contract" distinction is the most important idea in AI-first engineering.
+The demo scripts in `scripts/week-02/` show why this matters — free-text crashes a parser, structured output saves it. The "request vs contract" distinction is the most important idea in AI-first engineering. But a contract only guarantees *valid* JSON — the model can still return schema-valid output with the wrong content ("valid vs. right" is the next problem, and it's what evals solve later).
 
-**You'll also:** vary temperature, break the schema on purpose, add a few-shot example, and see what happens. The skill isn't getting it right the first time — it's building systems that survive the breakage.
+**You'll also:** vary temperature, break the schema on purpose, add a few-shot example, and see what happens. (Few-shot is enough for *format* adherence; *content* quality needs a dozen+ representative examples.) The skill isn't getting it right the first time — it's building systems that survive the breakage.
 
 ---
 

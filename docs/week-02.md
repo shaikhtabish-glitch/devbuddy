@@ -2,6 +2,8 @@
 
 **Goal:** Make the LLM return typed, validated objects — not prose.
 
+**The ladder** (fragile → reliable): prompt + parse → JSON mode → **structured output** (this week) → function calling (Week 4). Structured output is the first rung that guarantees *fields*, not just syntax.
+
 ---
 
 ## Setup
@@ -22,7 +24,7 @@ python -m pytest tests/test_schemas.py -v -k "not analyze_pr"
 # Should show 8 tests passing (pure Pydantic — no API calls, instant)
 
 python -m pytest tests/test_schemas.py -v
-# All 11 tests — includes 3 that call OpenRouter (requires API key)
+# All 12 tests — includes 4 that call OpenRouter (requires API key)
 ```
 
 ### Node.js
@@ -143,6 +145,8 @@ Now **delete severity from the system prompt too**. Run again. Does the model st
 
 Now **add a few-shot example** to the system prompt — an example with all four fields. Run once without the example, once with it. **Does the few-shot example improve adherence?**
 
+> Few-shot is enough for *format* adherence (what we're testing here). For *content* quality, you'd need a dozen+ examples that match production data — an n-shot problem, and what evals (Week 7) are for.
+
 ---
 
 ### Step 3: Vary temperature (5 min)
@@ -171,6 +175,8 @@ for (const temp of [0.0, 0.3, 0.7, 1.0]) {
 ```
 
 At temp=0: deterministic. At temp=0.7: summary drifts. At temp=1.0: wider drift.
+
+Key point: the schema guarantees **validity** at every temperature. Temperature controls **judgment** — so `temp=0` is a reproducibility choice (tests, CI, caching), not a correctness requirement.
 
 ---
 
@@ -234,9 +240,10 @@ npx vitest run tests/test_schemas.js -t "ServiceReadinessReport|BuildCheck"
 - [ ] Call `analyzePr()` / `analyze_pr()` and get back a typed object — not prose
 - [ ] Delete a field from the schema and see validation reject it
 - [ ] Run at `temperature=0` twice and get the same output
-- [ ] Run at `temperature=0.7` and see the summary wording change
+- [ ] Run at `temperature=0.7` and still get a *valid* typed object — only the wording changes
 - [ ] Set maxTokens low enough to trigger a truncation error
 - [ ] Explain: *"Raw JSON prompting is a request. Schema-constrained output is a contract."*
+- [ ] Explain: *"The schema guarantees validity; temperature controls judgment. Valid JSON is step one — the right JSON is step two."*
 
 ---
 
@@ -261,4 +268,4 @@ Add auto-retry (max 3 attempts) on validation failure. Feed it `ambiguous-diff.t
 
 ## Runbook Contribution
 
-Write a 1-paragraph ADR: "We chose temperature=0 for structured output because…"
+Write a 1-paragraph ADR: "For structured output we rely on the schema for validity and choose temperature for determinism vs. judgment — we default to `temperature=0` for reproducible tests and CI because…" (What would make you raise it?)

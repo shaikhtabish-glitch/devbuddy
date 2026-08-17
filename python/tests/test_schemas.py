@@ -44,6 +44,19 @@ def test_analyze_pr_temperature_zero_is_deterministic():
     assert r1.severity == r2.severity, "Temperature=0 should be deterministic"
 
 
+def test_analyze_pr_valid_at_high_temperature():
+    """The schema guarantees validity at high temperature —
+    validity is the schema's job, not temperature's. Temp controls judgment,
+    not whether the output parses as a BuildCheck."""
+    diff = "Fix login bug\n\nChanged auth.py line 42"
+    result = analyze_pr(title="Fix login bug", diff=diff, temperature=0.7)
+    assert isinstance(result, BuildCheck), f"Expected BuildCheck at temp=0.7, got {type(result).__name__}"
+    assert result.project, "project field is empty"
+    assert result.severity in ("low", "medium", "high", "critical"), f"Invalid severity: {result.severity}"
+    assert result.summary, "summary field is empty"
+    assert len(result.affected_files) > 0, "affected_files is empty"
+
+
 def test_analyze_pr_with_sample_data():
     """analyze_pr works with the provided sample diff."""
     with open("../shared/data/sample-diff.txt") as f:

@@ -39,7 +39,7 @@ print("─" * 65)
 print()
 
 for temp in [0.0, 0.3, 0.7, 1.0]:
-    label = "production" if temp == 0 else ("warm" if temp < 0.7 else "creative")
+    label = "deterministic" if temp == 0 else ("warm" if temp < 0.7 else "creative")
     result = analyze_pr(PR_TITLE, PR_DIFF, temperature=temp)
     print(f"  temp={temp} ({label}):")
     print(f"    severity={result.severity}")
@@ -52,6 +52,8 @@ print("  temp=0.0 → picks one answer, sticks to it every run.")
 print("  temp=0.7 → may flip between 'medium' and 'low' across runs.")
 print("  temp=1.0 → wider exploration. Same diff, different verdicts.")
 print("  Key: Pydantic guarantees VALIDITY. Temperature controls JUDGMENT.")
+print("  So temp=0 is a reproducibility choice (tests, caching, CI) —")
+print("  not a correctness requirement. The schema is what guarantees validity.")
 print()
 
 # ═══════════════════════════════════════════════════════════════
@@ -98,8 +100,7 @@ for temp in [0.0, 0.7]:
 
 print()
 print("  temp=0.0 vs temp=0.7 — cost is similar.")
-print("  The architectural choice isn't about saving tokens here.")
-print("  It's about deterministic contracts vs creative exploration.")
+print("  The choice isn't about saving tokens — it's determinism vs judgment.")
 print()
 print("=" * 65)
 print("  Inference parameters are architectural decisions, not knobs.")
