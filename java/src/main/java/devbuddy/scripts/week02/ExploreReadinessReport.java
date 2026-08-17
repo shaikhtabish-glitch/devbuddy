@@ -46,5 +46,31 @@ public class ExploreReadinessReport {
         System.out.println();
         System.out.println("  ✓ Round-trip OK: " + reloaded.service().name() + " → "
                 + (reloaded.verdict().ready() ? "ready" : "not ready"));
+
+        // ═══════════════════════════════════════════════════════════════════
+        // TAKE-HOME ASSIGNMENT
+        // ═══════════════════════════════════════════════════════════════════
+        //
+        // PART A — Load the other two scenarios:
+        //   1. Extend this script to also load and validate:
+        //      ../shared/data/service-readiness-degraded.json
+        //      ../shared/data/service-readiness-unknown.json
+        //   2. Tests are already in SchemasTest.java
+        //      (the degraded and unknown scenario tests are provided)
+        //
+        // PART B — LLM integration:
+        //   Use SchemasService.generateReadinessReport() (in devbuddy.service)
+        //   to feed the mock data to the LLM and get back a typed report.
+        //   It takes the service name plus the build/deployment JSON strings:
+        //
+        //     ServiceReadinessReport report = schemas.generateReadinessReport(
+        //         "auth-service",
+        //         "{\"status\":\"healthy\",\"last_deploy\":\"...\"}",
+        //         "{\"recent_deploys\":[...]}",
+        //         0.0);
+        //
+        //   Run this for all 3 scenarios. Compare the LLM's verdict to the
+        //   hand-written JSON — does the model agree? Where does it differ?
+        //   What would you change in the system prompt?
     }
 }
