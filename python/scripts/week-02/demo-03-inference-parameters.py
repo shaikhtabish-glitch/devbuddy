@@ -53,9 +53,10 @@ print("    → same verdict, but the phrasing drifts more.")
 print()
 
 print("  Key: every run returned a VALID BuildCheck — the schema guarantees")
-print("  validity at ANY temperature. Temperature only nudges how much the")
-print("  phrasing varies; on short fields that effect is subtle. temp=0 is a")
-print("  reproducibility choice (tests, CI, caching), not a correctness rule.")
+print("  validity at ANY temperature. Temperature barely moves the verdict; it")
+print("  only nudges the phrasing. temp=0 is a reproducibility choice (tests, CI),")
+print("  not a correctness rule. (Where temperature matters more is free-text")
+print("  reasoning — see demo-04, the sketchpad.)")
 print()
 
 # ═══════════════════════════════════════════════════════════════
@@ -102,7 +103,7 @@ for temp in [0.0, 0.7]:
 
 print()
 print("  temp=0.0 vs temp=0.7 — cost is similar.")
-print("  The choice isn't about saving tokens — it's determinism vs judgment.")
+print("  The choice isn't about saving tokens — it's determinism vs. judgment.")
 print()
 print("=" * 65)
 print("  Inference parameters are architectural decisions, not knobs.")

@@ -57,7 +57,7 @@ print()
 #   2. Add the same tests to tests/test_schemas.py
 #      (follow the healthy example that's already there)
 #
-# PART B — LLM integration:
+# PART B — LLM integration & Agentic Self-Correction:
 #   Use src.llm_functions.generate_readiness_report() to feed
 #   the mock data to the LLM and get back a typed report.
 #   Example:
@@ -78,7 +78,13 @@ print()
 #     # report is a typed ServiceReadinessReport — no parsing needed!
 #     print(report.model_dump_json(indent=2))
 #
-#   Run this for all 3 scenarios. Compare the LLM's verdict
-#   to the hand-written JSON — does the model agree? Where
-#   does it differ? What would you change in the prompt?
+#   1. Run this for all 3 scenarios. Compare the LLM's verdict
+#      to the hand-written JSON — does the model agree?
+#   2. Your schema has custom @model_validators (e.g., if ready=True, 
+#      blockers must be empty). What happens if the LLM violates this? 
+#      Pydantic throws a ValidationError.
+#   3. CHALLENGE: Catch the pydantic.ValidationError, extract the error 
+#      string, and send it back to the LLM as a new HumanMessage: 
+#      "Your output failed validation: {error}. Please correct it."
+#      (This is the foundation of Agentic Self-Correction!)
 # ═══════════════════════════════════════════════════════════════════

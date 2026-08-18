@@ -96,6 +96,8 @@ Open `src/schemas.py` (Python), `src/schemas.js` (Node.js), or `schemas/JsonSche
 | `python scripts/week-02/demo-01-prose-vs-structured.py` | `node scripts/week-02/demo-01-prose-vs-structured.js` | `devbuddy.scripts.week02.Demo01ProseVsStructured` |
 | `python scripts/week-02/demo-02-raw-vs-pydantic.py` | `node scripts/week-02/demo-02-raw-vs-zod.js` | `devbuddy.scripts.week02.Demo02RawVsStructured` |
 | `python scripts/week-02/demo-03-inference-parameters.py` | `node scripts/week-02/demo-03-inference-parameters.js` | `devbuddy.scripts.week02.Demo03InferenceParameters` |
+| `python scripts/week-02/demo-04-sketchpad.py` | `node scripts/week-02/demo-04-sketchpad.js` | `devbuddy.scripts.week02.Demo04Sketchpad` |
+| `python scripts/week-02/demo-05-agentic-retry.py` | `node scripts/week-02/demo-05-agentic-retry.js` | `devbuddy.scripts.week02.Demo05AgenticRetry` |
 | `python scripts/week-02/explore-readiness-report.py` | `node scripts/week-02/explore-readiness-report.js` | `devbuddy.scripts.week02.ExploreReadinessReport` |
 
 ---
