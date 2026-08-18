@@ -17,7 +17,9 @@ import { fileURLToPath } from "url";
 // ── Resolve .env path relative to this file ──────────────────
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const envPath = resolve(__dirname, "..", ".env");
-dotenv.config({ path: envPath, override: true });
+// override: false means a value you set in the terminal (process.env) WINS
+// over .env — so you can override the key/model per run. .env is the fallback.
+dotenv.config({ path: envPath, override: false });
 
 // ── Read raw value (with fallback) ───────────────────────────
 const get = (key, fallback) => process.env[key] || fallback;
