@@ -9,7 +9,7 @@
 import { HumanMessage } from "@langchain/core/messages";
 import { analyzePr } from "../../src/llm_functions.js";
 import { getLlm } from "../../src/llm.js";
-import { calculateCost } from "../../src/config.js";
+import { calculateCost, config } from "../../src/config.js";
 
 const PR_TITLE = "Consolidate error handling across user profile module";
 const PR_DIFF = [
@@ -23,6 +23,7 @@ const PR_DIFF = [
 console.log("=".repeat(65));
 console.log("  Demo 3: Inference Parameters — Temp, Max Tokens, Cost");
 console.log("=".repeat(65));
+console.log(`  Model: ${config.model}`);
 console.log();
 console.log(`  INPUT: ${PR_TITLE}`);
 for (const line of PR_DIFF.split("\n")) {

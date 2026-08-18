@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field, field_validator
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.llm import get_llm
+from src.config import DEVBUDDY_MODEL
 from langchain_core.messages import HumanMessage
 
 # ═══════════════════════════════════════════════════════════════
@@ -97,6 +98,7 @@ def run_demo():
     print("=" * 75)
     print("  DEMO: Raw JSON Prompting (Request) vs. Pydantic (Contract)")
     print("=" * 75)
+    print(f"  Model: {DEVBUDDY_MODEL}")
     print()
     print("  THE INPUT (same for both approaches):")
     print("  " + "-" * 55)

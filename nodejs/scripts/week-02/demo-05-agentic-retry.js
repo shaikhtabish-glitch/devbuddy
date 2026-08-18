@@ -10,6 +10,7 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { getLlm } from "../../src/llm.js";
 import { ServiceReadinessReportSchema } from "../../src/schemas.js";
+import { config } from "../../src/config.js";
 
 const llm = getLlm({ temperature: 0.2 });
 const structured = llm.withStructuredOutput(ServiceReadinessReportSchema);
@@ -41,6 +42,7 @@ function extractError(e) {
 console.log("=".repeat(75));
 console.log("  DEMO 5: Agentic Retry (Self-Correction)");
 console.log("=".repeat(75));
+console.log(`  Model: ${config.model}`);
 console.log();
 
 const maxRetries = 3;

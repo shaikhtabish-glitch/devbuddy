@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from src.llm_functions import analyze_pr
 from src.llm import get_llm
+from src.config import DEVBUDDY_MODEL
 
 PR_TITLE = "Consolidate error handling across user profile module"
 PR_DIFF  = (
@@ -25,6 +26,7 @@ PR_DIFF  = (
 print("=" * 65)
 print("  Demo 3: Inference Parameters — Temp, Max Tokens, Cost")
 print("=" * 65)
+print(f"  Model: {DEVBUDDY_MODEL}")
 print()
 print(f"  INPUT: {PR_TITLE}")
 print(f"         {PR_DIFF}")

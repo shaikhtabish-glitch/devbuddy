@@ -13,6 +13,7 @@ import json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.schemas import ServiceReadinessReport
+from src.config import DEVBUDDY_MODEL
 
 DATA_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -22,6 +23,7 @@ DATA_DIR = os.path.join(
 print("=" * 70)
 print("  ServiceReadinessReport — Reference Validation")
 print("=" * 70)
+print(f"  Model: {DEVBUDDY_MODEL}")
 print()
 
 # ── Reference: healthy scenario ───────────────────────────────

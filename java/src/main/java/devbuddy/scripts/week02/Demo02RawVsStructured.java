@@ -89,6 +89,7 @@ public class Demo02RawVsStructured {
             System.out.println("=".repeat(75));
             System.out.println("  DEMO: Raw JSON Prompting (Request) vs. Structured Output (Contract)");
             System.out.println("=".repeat(75));
+            System.out.println("  Model: " + model);
             System.out.println();
             System.out.println("  THE INPUT (same for both approaches):");
             System.out.println("  " + "-".repeat(55));

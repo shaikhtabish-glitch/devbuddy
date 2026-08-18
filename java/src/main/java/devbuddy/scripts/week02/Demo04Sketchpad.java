@@ -78,6 +78,7 @@ public class Demo04Sketchpad {
             System.out.println("=".repeat(75));
             System.out.println("  DEMO 4: The <Sketchpad> Pattern");
             System.out.println("=".repeat(75));
+            System.out.println("  Model: " + model);
 
             System.out.println();
             System.out.println("  APPROACH A: Direct Verdict (No Sketchpad)");

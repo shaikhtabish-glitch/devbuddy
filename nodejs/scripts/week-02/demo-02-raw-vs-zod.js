@@ -18,6 +18,7 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { getLlm } from "../../src/llm.js";
+import { config } from "../../src/config.js";
 
 // ═══════════════════════════════════════════════════════════════
 // THE INPUT — same for both approaches
@@ -91,6 +92,7 @@ async function runDemo() {
     "  DEMO: Raw JSON Prompting (Request) vs. Zod (Contract)"
   );
   console.log("=".repeat(75));
+  console.log(`  Model: ${config.model}`);
   console.log();
   console.log("  THE INPUT (same for both approaches):");
   console.log("  " + "-".repeat(55));

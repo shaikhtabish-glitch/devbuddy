@@ -10,6 +10,7 @@ import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { ServiceReadinessReportSchema } from "../../src/schemas.js";
+import { config } from "../../src/config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = resolve(__dirname, "..", "..", "..", "shared", "data");
@@ -17,6 +18,7 @@ const DATA_DIR = resolve(__dirname, "..", "..", "..", "shared", "data");
 console.log("=".repeat(70));
 console.log("  ServiceReadinessReport — Reference Validation");
 console.log("=".repeat(70));
+console.log(`  Model: ${config.model}`);
 console.log();
 
 // ── Reference: healthy scenario ───────────────────────────────

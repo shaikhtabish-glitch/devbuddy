@@ -27,6 +27,7 @@ from typing import Literal
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.llm import get_llm
+from src.config import DEVBUDDY_MODEL
 from langchain_core.messages import HumanMessage, SystemMessage
 
 # A tricky PR that looks like a simple feature addition (adding a shipping fee),
@@ -79,6 +80,7 @@ def run_demo():
     print("=" * 75)
     print("  DEMO 4: The <Sketchpad> Pattern")
     print("=" * 75)
+    print(f"  Model: {DEVBUDDY_MODEL}")
     
     # We use a slightly higher temperature to show the model's analytical capabilities
     llm = get_llm(temperature=0.4)

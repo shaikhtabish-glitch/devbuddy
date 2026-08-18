@@ -11,6 +11,7 @@
 import { HumanMessage } from "@langchain/core/messages";
 import { getLlm } from "../../src/llm.js";
 import { analyzePr } from "../../src/llm_functions.js";
+import { config } from "../../src/config.js";
 
 const PR_TITLE = "Fix login redirect loop in auth-service";
 const PR_DIFF = [
@@ -23,6 +24,7 @@ const PR_DIFF = [
 console.log("=".repeat(70));
 console.log("  Demo 1: Prose → crash, then Schema → success");
 console.log("=".repeat(70));
+console.log(`  Model: ${config.model}`);
 console.log();
 console.log(`  INPUT: ${PR_TITLE}`);
 for (const line of PR_DIFF.split("\n")) {

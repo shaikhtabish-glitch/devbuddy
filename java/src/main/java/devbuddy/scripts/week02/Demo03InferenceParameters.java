@@ -26,10 +26,12 @@ public class Demo03InferenceParameters {
     public static void main(String[] args) {
         try (var ctx = new AnnotationConfigApplicationContext(AppConfig.class)) {
             SchemasService schemas = ctx.getBean(SchemasService.class);
+            String model = ctx.getBean("modelName", String.class);
 
             System.out.println("=".repeat(65));
             System.out.println("  Demo 3: Inference Parameters — Temp, Max Tokens");
             System.out.println("=".repeat(65));
+            System.out.println("  Model: " + model);
             System.out.println();
 
             // ── Part 1: temperature — determinism vs. judgment ──

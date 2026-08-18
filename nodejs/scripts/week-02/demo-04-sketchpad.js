@@ -15,6 +15,7 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { getLlm } from "../../src/llm.js";
+import { config } from "../../src/config.js";
 
 // A tricky PR that looks like a simple feature addition (adding a shipping fee),
 // but contains a subtle revenue-loss math bug (subtracting instead of adding).
@@ -73,6 +74,7 @@ const human = new HumanMessage(TRICKY_PR_DIFF);
 console.log("=".repeat(75));
 console.log("  DEMO 4: The <Sketchpad> Pattern");
 console.log("=".repeat(75));
+console.log(`  Model: ${config.model}`);
 
 console.log("\n  APPROACH A: Direct Verdict (No Sketchpad)");
 console.log("  The model must decide 'severity' on token #1.");

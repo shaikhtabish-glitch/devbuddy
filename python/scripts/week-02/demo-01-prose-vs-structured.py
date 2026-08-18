@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from langchain_core.messages import HumanMessage
 from src.llm import get_llm
 from src.llm_functions import analyze_pr
+from src.config import DEVBUDDY_MODEL
 
 PR_TITLE = "Fix login redirect loop in auth-service"
 PR_DIFF = (
@@ -31,6 +32,7 @@ PR_DIFF = (
 print("=" * 70)
 print("  Demo 1: Prose → crash, then Schema → success")
 print("=" * 70)
+print(f"  Model: {DEVBUDDY_MODEL}")
 print()
 print(f"  INPUT: {PR_TITLE}")
 for line in PR_DIFF.split("\n"):

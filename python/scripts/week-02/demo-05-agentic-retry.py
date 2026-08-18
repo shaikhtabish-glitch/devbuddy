@@ -22,12 +22,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from src.llm import get_llm
 from src.schemas import ServiceReadinessReport
+from src.config import DEVBUDDY_MODEL
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 
 def run_demo():
     print("=" * 75)
     print("  DEMO 5: Agentic Retry (Self-Correction)")
     print("=" * 75)
+    print(f"  Model: {DEVBUDDY_MODEL}")
     print()
 
     llm = get_llm(temperature=0.2)

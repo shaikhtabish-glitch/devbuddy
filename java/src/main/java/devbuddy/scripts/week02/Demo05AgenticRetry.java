@@ -45,6 +45,7 @@ public class Demo05AgenticRetry {
             System.out.println("=".repeat(75));
             System.out.println("  DEMO 5: Agentic Retry (Self-Correction)");
             System.out.println("=".repeat(75));
+            System.out.println("  Model: " + model);
             System.out.println();
 
             StringBuilder userPrompt = new StringBuilder(TRAP_PROMPT);

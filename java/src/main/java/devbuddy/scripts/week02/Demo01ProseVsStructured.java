@@ -30,10 +30,12 @@ public class Demo01ProseVsStructured {
         try (var ctx = new AnnotationConfigApplicationContext(AppConfig.class)) {
             ChatClient chatClient = ctx.getBean(ChatClient.class);
             SchemasService schemas = ctx.getBean(SchemasService.class);
+            String model = ctx.getBean("modelName", String.class);
 
             System.out.println("=".repeat(70));
             System.out.println("  Demo 1: Prose → crash, then Schema → success");
             System.out.println("=".repeat(70));
+            System.out.println("  Model: " + model);
             System.out.println();
             System.out.println("  INPUT: " + PR_TITLE);
             for (String line : PR_DIFF.split("\n")) {
