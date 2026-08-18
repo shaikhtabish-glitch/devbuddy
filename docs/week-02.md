@@ -67,7 +67,7 @@ mvn test -Dtest=SchemasLlmTest
 
 ## What You Have
 
-Open `src/schemas.py` (Python), `src/schemas.js` (Node.js), or `schemas/JsonSchemas.java` + `schemas/SchemasService.java` (Java). Each contains **two schema families**:
+Open `src/schemas.py` (Python), `src/schemas.js` (Node.js), or `schemas/JsonSchemas.java` (Java) — the schema families. The analyze functions live in `src/llm_functions.py` / `src/llm_functions.js` / `service/SchemasService.java`. Each language has **two schema families**:
 
 | Schema | Shape | Purpose |
 |--------|-------|---------|
@@ -78,7 +78,8 @@ Open `src/schemas.py` (Python), `src/schemas.js` (Node.js), or `schemas/JsonSche
 
 | Python | Node.js | Java | Purpose |
 |--------|---------|------|---------|
-| `src/schemas.py` | `src/schemas.js` | `schemas/JsonSchemas.java`, `schemas/SchemasService.java` | Study the two schemas, extend `BuildCheck` during hands-on |
+| `src/schemas.py` | `src/schemas.js` | `schemas/JsonSchemas.java` | The two schema families (the contract) |
+| `src/llm_functions.py` | `src/llm_functions.js` | `service/SchemasService.java` | `analyze_pr` / `analyzePr` (the LLM call) |
 | `src/llm.py` | `src/llm.js` | `config/AppConfig.java` | Already built (LLM client factory) |
 | `tests/test_schemas.py` | `tests/test_schemas.js` | `SchemasTest.java`, `SchemasLlmTest.java` | Add your own test cases |
 
@@ -104,7 +105,7 @@ Open `src/schemas.py` (Python), `src/schemas.js` (Node.js), or `schemas/JsonSche
 
 ## In-Session Steps
 
-The moderator will run two demos first. Watch them, then follow these steps on your own machine.
+The moderator will run the demos first. Watch them, then follow these steps on your own machine.
 
 ---
 
@@ -113,7 +114,7 @@ The moderator will run two demos first. Watch them, then follow these steps on y
 **Python:**
 
 ```python
-from src.schemas import analyze_pr
+from src.llm_functions import analyze_pr
 
 with open("../shared/data/sample-diff.txt") as f:
     diff = f.read()
@@ -134,7 +135,7 @@ print(result.model_dump_json(indent=2))
 
 ```js
 import { readFileSync } from "fs";
-import { analyzePr } from "./schemas.js";
+import { analyzePr } from "./llm_functions.js";
 
 const diff = readFileSync("../shared/data/sample-diff.txt", "utf-8");
 
@@ -304,6 +305,26 @@ mvn test -Dtest=SchemasTest
 
 ---
 
+### Step 6: Sketchpad & Agentic Retry (10 min)
+
+**The sketchpad** (`demo-04`): putting a `thought_process` field *first* in the schema makes the model expose its step-by-step reasoning — an **audit trail**, not just a verdict. Modern models often get the answer right anyway; the sketchpad is about **observability** (debugging + evals), which is what bridges the "valid vs. right" gap.
+
+```bash
+python scripts/week-02/demo-04-sketchpad.py       # Python
+node scripts/week-02/demo-04-sketchpad.js         # Node.js
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week02.Demo04Sketchpad   # Java
+```
+
+**Agentic retry** (`demo-05`): trap the model into a cross-field violation (`ready=true` *and* blockers), catch the validation error, feed it back, and watch the model correct itself — the foundation of self-correction.
+
+```bash
+python scripts/week-02/demo-05-agentic-retry.py
+node scripts/week-02/demo-05-agentic-retry.js
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week02.Demo05AgenticRetry
+```
+
+---
+
 ## Acceptance Criteria
 
 - [ ] Call `analyzePr()` / `analyze_pr()` and get back a typed object — not prose
@@ -311,6 +332,8 @@ mvn test -Dtest=SchemasTest
 - [ ] Run at `temperature=0` twice and get a consistent verdict
 - [ ] Run at `temperature=1.0` twice and still get a *valid* typed object both times — only the phrasing drifts
 - [ ] Set maxTokens low enough to trigger a truncation error
+- [ ] Add a `thought_process` (sketchpad) field first and see the model expose its reasoning — an audit trail
+- [ ] Trigger a cross-field violation and watch the agentic retry loop self-correct
 - [ ] Explain: *"Raw JSON prompting is a request. Schema-constrained output is a contract."*
 - [ ] Explain: *"The schema guarantees validity at any temperature; `max_tokens` (truncation) is the parameter that bites. Valid JSON is step one — the right JSON is step two."*
 
@@ -329,12 +352,12 @@ mvn test -Dtest=SchemasTest
 
 Use `generateReadinessReport()` / `generate_readiness_report()` to feed mock data to the LLM and get back a typed `ServiceReadinessReport`. Compare the LLM's verdict to hand-written JSON. Where does it differ? What prompt changes would improve accuracy?
 
-### Part C: BuildCheck + auto-retry (if time permits)
+### Part C: Agentic retry + the ambiguous PR (if time permits)
 
-Add auto-retry (max 3 attempts) on validation failure. Feed it `ambiguous-diff.txt` and document what broke.
+demo-05 showed the retry loop on `ServiceReadinessReport`. Now apply it to `BuildCheck`: feed it `ambiguous-diff.txt` and document what broke — did validation catch it, or did the model return wrong-but-valid JSON?
 
 ---
 
 ## Runbook Contribution
 
-Write a 1-paragraph ADR: "For structured output we rely on the schema for validity and choose temperature for determinism vs. judgment — we default to `temperature=0` for reproducible tests and CI because…" (What would make you raise it?)
+Write a 1-paragraph ADR: "For structured output the schema guarantees validity at any temperature, so temperature is a minor reproducibility dial; `max_tokens` is the parameter that actually bites (truncation). We default to `temperature=0` for reproducible tests and CI because…" (When would you raise it, and when would you add a sketchpad for observability?)

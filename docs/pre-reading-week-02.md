@@ -46,7 +46,7 @@ Open `src/schemas.py` (Python), `src/schemas.js` (Node.js), or `schemas/JsonSche
 
 The demo scripts in `scripts/week-02/` show why this matters — free-text crashes a parser, structured output saves it. The "request vs contract" distinction is the most important idea in AI-first engineering. But a contract only guarantees *valid* JSON — the model can still return schema-valid output with the wrong content ("valid vs. right" is the next problem, and it's what evals solve later).
 
-**You'll also:** vary temperature, break the schema on purpose, add a few-shot example, and see what happens. (Few-shot is enough for *format* adherence; *content* quality needs a dozen+ representative examples.) The skill isn't getting it right the first time — it's building systems that survive the breakage.
+**You'll also:** vary temperature, break the schema on purpose, add a few-shot example, and see what happens. (Few-shot is enough for *format* adherence; *content* quality needs a dozen+ representative examples.) You'll also add a **sketchpad** (`thought_process`) for an audit trail, and watch an **agentic retry** loop self-correct a validation error. The skill isn't getting it right the first time — it's building systems that survive the breakage.
 
 ---
 
