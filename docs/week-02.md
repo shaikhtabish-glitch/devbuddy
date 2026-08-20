@@ -4,6 +4,18 @@
 
 **The ladder** (fragile → reliable): prompt + parse → JSON mode → **structured output** (this week) → function calling (Week 4). Structured output is the first rung that guarantees *fields*, not just syntax.
 
+### Which technique when (trade-offs)
+
+| Technique | Adheres to *your* schema? | Model support | Extra cost/latency | Use when |
+|---|---|---|---|---|
+| Prompt-only JSON | No | Any | None | Prototype only |
+| JSON Mode | Valid JSON, not your shape | Broad | None | Fallback when strict isn't available |
+| JSON Schema (strict) | **Guaranteed** | Newer OpenAI/GPT-class; limited on free OpenRouter models | Slight | Best when the model supports it |
+| Pydantic typed object | Enforced after the call | Any | None | **Always** — it's the contract |
+| Validate + retry | Yes, eventually | Any | +1–2 calls on failure | Safety net for weak/free models |
+
+> In LangChain, `with_structured_output(schema, method=...)` selects the enforcement: `"function_calling"` (portable default), `"json_schema"` (strict), or `"json_mode"`. Swapping `method=` changes reliability without touching the schema. The reusable `get_structured()` helper in `src/llm_functions.py` wraps this with a validate-and-retry loop.
+
 ---
 
 ## Setup

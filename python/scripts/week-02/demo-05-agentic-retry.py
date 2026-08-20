@@ -16,14 +16,15 @@ Run: python scripts/week-02/demo-05-agentic-retry.py
 
 import os
 import sys
-from pydantic import ValidationError
+import warnings
 
+warnings.filterwarnings("ignore", message=".*Pydantic serializer.*")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.llm import get_llm
 from src.schemas import ServiceReadinessReport
+from src.llm_functions import get_structured
 from src.config import DEVBUDDY_MODEL
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 def run_demo():
     print("=" * 75)
@@ -31,9 +32,6 @@ def run_demo():
     print("=" * 75)
     print(f"  Model: {DEVBUDDY_MODEL}")
     print()
-
-    llm = get_llm(temperature=0.2)
-    structured_llm = llm.with_structured_output(ServiceReadinessReport)
 
     # 1. The Trap
     print("  [Step 1] Constructing a contradictory prompt...")
@@ -46,43 +44,27 @@ def run_demo():
         "2. You MUST also list the DB incident in the verdict.blockers array.\n"
         "3. You MUST include at least one item in the 'evidence' array so confidence can be high.\n"
     )
-    
+
     messages = [
         SystemMessage(content="You are a strict SRE. Follow instructions exactly."),
-        HumanMessage(content=trap_prompt)
+        HumanMessage(content=trap_prompt),
     ]
 
-    print("  [Step 2] Executing LLM Call with Agentic Retry...")
-    max_retries = 3
-    
-    for attempt in range(1, max_retries + 1):
-        try:
-            print(f"\n  Attempt {attempt} / {max_retries}...")
-            result = structured_llm.invoke(messages)
-            
-            print("\n  ✅ SUCCESS! The LLM produced valid output:")
-            print(f"     ready:    {result.verdict.ready}")
-            print(f"     blockers: {result.verdict.blockers}")
-            
-            if attempt > 1:
-                print("\n  By giving the LLM the stack trace, it acted as its own debugger.")
-            else:
-                print("\n  ❌ WAIT. The LLM passed on the first try? The trap failed.")
-            return
-            
-        except ValidationError as e:
-            error_msg = e.errors()[0]['msg']
-            print(f"  ❌ Caught Pydantic ValidationError:\n     {error_msg}")
-            
-            if attempt < max_retries:
-                print("  -> Feeding error back to the LLM for self-correction...")
-                messages.append(HumanMessage(
-                    content=f"Your previous output failed schema validation with this error:\n"
-                            f"{error_msg}\n\n"
-                            f"Please analyze the error and output a corrected JSON."
-                ))
-            else:
-                print("\n  ❌ Max retries reached. The LLM could not fix the error.")
+    # 2. The self-correction loop now lives in the reusable get_structured() helper:
+    #    it invokes the model, validates against the schema, and on a ValidationError
+    #    appends the error to the conversation and retries — the LLM debugs itself.
+    print("  [Step 2] Executing LLM call via get_structured() (validate + retry)...")
+    try:
+        result = get_structured(
+            messages, ServiceReadinessReport, temperature=0.2, retries=3
+        )
+        print("\n  ✅ SUCCESS! The model produced schema-valid output:")
+        print(f"     ready:    {result.verdict.ready}")
+        print(f"     blockers: {result.verdict.blockers}")
+        print("\n  The retry loop fed each validation error back to the model until it")
+        print("  resolved the contradiction itself — the seed of agentic architecture.")
+    except ValueError as e:
+        print(f"\n  ❌ The model could not satisfy the contract within the retry budget:\n     {e}")
 
 if __name__ == "__main__":
     run_demo()

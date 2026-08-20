@@ -69,7 +69,7 @@ print("  PART 2: Max Tokens — cost guard or truncation risk?")
 print("─" * 65)
 print()
 
-for limit in [200, 50, 15, 8]:
+for limit in [512, 200, 50, 15, 8]:
     try:
         result = analyze_pr(PR_TITLE, PR_DIFF, temperature=0.0, max_tokens=limit)
         print(f"  max_tokens={limit:>3}: ✅ {result.severity}")
@@ -78,7 +78,8 @@ for limit in [200, 50, 15, 8]:
         print(f"  max_tokens={limit:>3}: ❌ {msg}")
 
 print()
-print(f"  Set max_tokens=200 → safe. Cost ceiling: high.")
+print(f"  Set max_tokens=512 → safe. Cost ceiling: moderate.")
+print(f"  Set max_tokens=200 → still may fail depending on model/provider.")
 print(f"  Set max_tokens=8   → truncated. Validation fails.")
 print(f"  Rule: max_tokens must fit your schema. Measure, don't guess.")
 print()

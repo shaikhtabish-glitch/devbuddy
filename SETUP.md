@@ -4,8 +4,8 @@
 
 ## Prerequisites
 
-- Python 3.11 or later (`python --version`)
-- Node.js 20 or later (`node --version`) — for Promptfoo evals (Week 7)
+- Python 3 (`python --version` or `py --version`)
+- Node.js (LTS recommended, `node --version`) — for Promptfoo evals
 - Git
 - An OpenRouter API key (check `#devbuddy-series` or contact the ops team)
 
@@ -74,6 +74,12 @@ or `uv pip install -e ".[rag]"` etc.). Dev tooling (pytest): `uv pip install -r 
 
 ```bash
 cp .env.example .env
+```
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
 ```
 
 Edit `.env` and add your OpenRouter API key:
@@ -186,6 +192,14 @@ export OPENROUTER_API_KEY=sk-or-your-key
 npx promptfoo@latest eval --config week-00-smoke.yaml
 ```
 
+Windows PowerShell:
+
+```powershell
+cd ..\shared\evals
+$env:OPENROUTER_API_KEY = "sk-or-your-key"
+npx promptfoo@latest eval --config week-00-smoke.yaml
+```
+
 You'll see a table comparing both models across all 4 test cases — pass/fail, latency, and cost per call.
 
 ---
@@ -197,6 +211,6 @@ You'll see a table comparing both models across all 4 test cases — pass/fail, 
 | `OPENROUTER_API_KEY not set` | Did you copy `.env.example` to `.env`? Add your key? Running from `python/`? |
 | `ModuleNotFoundError: langchain_openai` | `pip install -r requirements.txt` from `python/` |
 | `ModuleNotFoundError: src` | You must run from `python/`: `cd python && python src/verification.py` |
-| `python: command not found` | Try `python3`, or install Python 3.11+ |
+| `python: command not found` | Try `python3` (Linux/macOS) or `py` (Windows) |
 | Script times out | Check network. Shared sandbox keys may be rate-limited. |
 | Anything else | Post in `#devbuddy-series`. Public debugging builds shared knowledge. |

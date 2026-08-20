@@ -19,9 +19,11 @@ Run: python scripts/week-02/demo-02-raw-vs-pydantic.py
 import os
 import sys
 import json
+import warnings
 from typing import List, Optional, Literal
 from pydantic import BaseModel, Field, field_validator
 
+warnings.filterwarnings("ignore", message=".*Pydantic serializer.*")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.llm import get_llm

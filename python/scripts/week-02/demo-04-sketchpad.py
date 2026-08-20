@@ -21,9 +21,11 @@ Run: python scripts/week-02/demo-04-sketchpad.py
 
 import os
 import sys
+import warnings
 from pydantic import BaseModel, Field
 from typing import Literal
 
+warnings.filterwarnings("ignore", message=".*Pydantic serializer.*")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.llm import get_llm

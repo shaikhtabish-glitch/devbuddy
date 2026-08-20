@@ -79,7 +79,7 @@ console.log("  PART 2: Max Tokens — cost guard or truncation risk?");
 console.log("─".repeat(65));
 console.log();
 
-for (const limit of [200, 50, 15, 8]) {
+for (const limit of [512, 200, 50, 15, 8]) {
   try {
     const result = await analyzePr({
       title: PR_TITLE,
@@ -95,7 +95,8 @@ for (const limit of [200, 50, 15, 8]) {
 }
 
 console.log();
-console.log("  Set maxTokens=200 → safe. Cost ceiling: high.");
+console.log("  Set maxTokens=512 → safe. Cost ceiling: moderate.");
+console.log("  Set maxTokens=200 → still may fail depending on model/provider.");
 console.log("  Set maxTokens=8   → truncated. Validation fails.");
 console.log("  Rule: maxTokens must fit your schema. Measure, don't guess.");
 console.log();

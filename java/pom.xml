@@ -12,7 +12,7 @@
     <description>DevBuddy AI Practitioner Series — Java CLI</description>
 
     <properties>
-        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-ai.version>1.0.0</spring-ai.version>
         <logback.version>1.5.12</logback.version>
@@ -101,6 +101,16 @@
 
     <build>
         <plugins>
+            <!-- Ensure modern Java toolchain settings are applied during compile -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>${maven.compiler.release}</release>
+                </configuration>
+            </plugin>
+
             <!-- Executable fat jar -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

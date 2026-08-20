@@ -25,19 +25,43 @@ export async function analyzePr({
   temperature = 0.0,
   maxTokens = null,
 }) {
+  const prompt =
+    "You are a code reviewer. Analyze the given PR and return a BuildCheck.\n" +
+    "- severity: 'critical' if it touches auth, payments, or security. " +
+    "'high' if it changes core logic. 'medium' for feature work. 'low' for docs/typos.\n" +
+    "- summary: one sentence describing what changed and why.\n" +
+    "- affected_files: list the files mentioned in the diff.\n" +
+    "- project: extract the project or service name from the PR context.";
+
+  return analyzePrWithPrompt({
+    title,
+    diff,
+    promptTemplate: prompt,
+    temperature,
+    maxTokens,
+  });
+}
+
+export async function analyzePrWithPrompt({
+  title,
+  diff,
+  promptTemplate,
+  temperature = 0.0,
+  maxTokens = null,
+}) {
   const llm = getLlm({ temperature, maxTokens });
   const structured = llm.withStructuredOutput(BuildCheckSchema);
 
+  const prompt = promptTemplate
+    .replaceAll("{{title}}", title)
+    .replaceAll("{{diff}}", diff);
+
   const result = await structured.invoke([
     new SystemMessage(
-      "You are a code reviewer. Analyze the given PR and return a BuildCheck.\n" +
-        "- severity: 'critical' if it touches auth, payments, or security. " +
-        "'high' if it changes core logic. 'medium' for feature work. 'low' for docs/typos.\n" +
-        "- summary: one sentence describing what changed and why.\n" +
-        "- affected_files: list the files mentioned in the diff.\n" +
-        "- project: extract the project or service name from the PR context."
+      "You are a careful code reviewer. Follow the instructions exactly and " +
+        "return only a valid JSON object that matches the schema."
     ),
-    new HumanMessage(`PR Title: ${title}\n\nDiff:\n${diff}`),
+    new HumanMessage(prompt),
   ]);
 
   return result;
