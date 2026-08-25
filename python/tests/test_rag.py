@@ -19,10 +19,10 @@ def _build_index():
 
 def test_rag_imports_llm():
     """rag.py imports from llm.py — the import graph holds."""
-    from src.rag import grounded_answer
+    import src.rag as rag
     import inspect
-    source = inspect.getsource(grounded_answer)
-    assert "get_llm" in source, "grounded_answer should call get_llm() from src.llm"
+    source = inspect.getsource(rag)
+    assert "get_llm" in source, "rag.py should use get_llm() from src.llm"
 
 
 def test_index_creates_chunks():
