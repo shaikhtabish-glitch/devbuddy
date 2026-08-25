@@ -32,6 +32,7 @@ cd devbuddy && git pull upstream main
 # 2. Start Qdrant vector database (required for Week 3+)
 docker-compose up -d
 curl http://localhost:6333/healthz
+#http://localhost:6333/dashboard
 
 # 3. Install dependencies
 cd nodejs
@@ -41,6 +42,24 @@ npm install --legacy-peer-deps
 # 4. (For Node 26+) Approve installation scripts for native modules if warned:
 # npm approve-scripts onnxruntime-node protobufjs sharp esbuild
 # npm install --legacy-peer-deps
+```
+
+### Java
+
+```bash
+# 1. Pull latest code
+cd devbuddy && git pull upstream main
+
+# 2. Start Qdrant vector database (required for Week 3+)
+docker-compose up -d
+curl http://localhost:6333/healthz
+#http://localhost:6333/dashboard
+
+# 3. Configure + build
+cd java
+cp src/main/resources/application.properties.example src/main/resources/application.properties
+# set openrouter.api.key=sk-or-... (or export OPENROUTER_API_KEY)
+mvn compile
 ```
 
 Verify you're ready:
@@ -59,26 +78,35 @@ npx vitest run tests/test_rag.js
 # 8 tests — requires Qdrant running
 ```
 
+**Java:**
+
+```bash
+mvn test -Dtest=RagTest
+# 6 tests — requires Qdrant running
+```
+
 ---
 
 ## What You Have
 
 Open `src/rag.py`. It already contains a full RAG pipeline:
 
-- `index_documents(directory, chunk_size, chunk_overlap)` — loads .md/.txt, chunks, embeds, stores in ChromaDB
+- `index_documents(directory, chunk_size, chunk_overlap)` — loads .md/.txt, chunks, embeds, stores in Qdrant
 - `retrieve(query, k)` — top-k semantic search
-- `hybrid_search(query, k)` — BM25 + vector interleaved merge
+- `hybrid_search(query, k)` — BM25 + vector fused via RRF
 - `grounded_answer(query, k, temperature)` — retrieve → inject into prompt → LLM answer
 - `grounded_answer_with_chunks(query, k, temperature)` — returns answer + chunks for transparency
 
-**Vector store:** Qdrant — runs in Docker (`docker-compose up -d`). Production-grade, cross-language (Python/Node.js/Java). Dashboard at http://localhost:6333/dashboard.
+**Java:** the same pipeline lives in `java/src/main/java/devbuddy/rag/RagService.java` — `indexDocuments()`, `retrieve()`, `hybridSearch()`, `groundedAnswer()`, `groundedAnswerWithChunks()`.
 
-**Embeddings:** `all-MiniLM-L6-v2` via `langchain-huggingface` — local, free, no API cost. Downloaded once on first use (~80MB).
+**Vector store:** Qdrant — runs in Docker (`docker-compose up -d`). Production-grade, cross-language (Python/Node.js/Java). Dashboard at http://localhost:6333/dashboard. Python/Node use the REST API (port 6333); Java uses gRPC (port 6334).
+
+**Embeddings:** `all-MiniLM-L6-v2` — local, free, no API cost. Python via `langchain-huggingface`, Node via `@xenova/transformers`, Java via DJL + ONNX Runtime. Downloaded once on first use.
 
 **Import graph:** `rag → llm → config` ✅
 
 ## Files You'll Touch
-- `src/rag.py` — study the implementation, extend it during hands-on
+- `src/rag.py` (Python) / `src/rag.js` (Node) / `java/src/main/java/devbuddy/rag/RagService.java` (Java) — study the implementation, extend it during hands-on
 - `src/llm.py` — already built (`get_llm()` factory)
 - `shared/data/` — document set to index
 
@@ -89,12 +117,12 @@ Open `src/rag.py`. It already contains a full RAG pipeline:
 
 ## Demo Scripts
 
-| Demo | Python | Node.js |
-|------|--------|---------|
-| Demo 1: Embed → Retrieve → Ground | `python scripts/week-03/demo-01-embed-retrieve-ground.py` | `node scripts/week-03/demo-01-embed-retrieve-ground.js` |
-| Demo 2: Hallucinate → Ground | `python scripts/week-03/demo-02-hallucinate-ground.py` | `node scripts/week-03/demo-02-hallucinate-ground.js` |
-| Demo 3: Chunk Size 256/512/1024 | `python scripts/week-03/demo-03-chunk-size.py` | `node scripts/week-03/demo-03-chunk-size.js` |
-| Demo 4: Hybrid Search | `python scripts/week-03/demo-04-hybrid-search.py` | `node scripts/week-03/demo-04-hybrid-search.js` |
+| Demo | Python | Node.js | Java |
+|------|--------|---------|------|
+| Demo 1: Embed → Retrieve → Ground | `python scripts/week-03/demo-01-embed-retrieve-ground.py` | `node scripts/week-03/demo-01-embed-retrieve-ground.js` | `mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week03.Demo01EmbedRetrieveGround` |
+| Demo 2: Hallucinate → Ground | `python scripts/week-03/demo-02-hallucinate-ground.py` | `node scripts/week-03/demo-02-hallucinate-ground.js` | `mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week03.Demo02HallucinateGround` |
+| Demo 3: Chunk Size 256/512/1024 | `python scripts/week-03/demo-03-chunk-size.py` | `node scripts/week-03/demo-03-chunk-size.js` | `mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week03.Demo03ChunkSize` |
+| Demo 4: Hybrid Search | `python scripts/week-03/demo-04-hybrid-search.py` | `node scripts/week-03/demo-04-hybrid-search.js` | `mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week03.Demo04HybridSearch` |
 
 ---
 
@@ -124,6 +152,14 @@ const count = await indexDocuments();
 console.log(`Indexed ${count} chunks`);
 ```
 
+**Java:**
+
+```java
+// RagService — see Demo01EmbedRetrieveGround for the full flow.
+int count = rag.indexDocuments(null, 512, 64);
+System.out.println("Indexed " + count + " chunks");
+```
+
 **Check:** After running, visit http://localhost:6333/dashboard — you should see the `devbuddy-docs` collection with chunks.
 
 **Want to understand the implementation?** Open `src/rag.py`. Read `index_documents()` — it uses `DirectoryLoader` → `RecursiveCharacterTextSplitter` → `HuggingFaceEmbeddings` → `QdrantVectorStore`. This is the standard LangChain RAG pattern with a production vector DB. Note the separators: `\n# `, `\n## `, `\n### ` — single `#` is critical for splitting top-level document titles.
@@ -148,6 +184,13 @@ for i, chunk in enumerate(chunks):
 # Inject the chunks into a prompt and ask the LLM
 answer = grounded_answer("What endpoints does the payment API expose?")
 print(answer)
+```
+
+**Java:**
+
+```java
+java.util.List<String> chunks = rag.retrieve("What endpoints does the payment API expose?", 3);
+String answer = rag.groundedAnswer("What endpoints does the payment API expose?", 3, 0.0);
 ```
 
 The model should answer from the retrieved chunks — not from its training data. Verify: does the answer match the content in `shared/data/payment-api-spec.md`?
@@ -189,6 +232,13 @@ for i, c in enumerate(chunks):
 # ✅ Retrieved from inventory-service-sla.md
 ```
 
+**Java:**
+
+```java
+RagService.GroundedResult r = rag.groundedAnswerWithChunks(
+        "What's the revenue forecast for Q4 2028?", 3, 0.0);  // out-of-corpus → declines
+```
+
 The system prompt IS the guardrail. Without it, the out-of-corpus question would produce a confident hallucination. With it, the model declines. This is context engineering: you control what the model does when retrieval fails.
 
 ---
@@ -204,6 +254,15 @@ for size in [256, 512, 1024]:
     print(f"\nchunk_size={size}:")
     for i, c in enumerate(chunks):
         print(f"  [{i+1}] {c[:120]}...")
+```
+
+**Java:**
+
+```java
+for (int size : new int[]{256, 512, 1024}) {
+    rag.indexDocuments("../shared/data/", size, 64);
+    // retrieve + inspect chunks (see Demo03ChunkSize)
+}
 ```
 
 **Discussion:** Which chunk size gave the most relevant results? Too small loses context ("Fork the repo..." split across chunks loses "then clone it"). Too large dilutes relevance (a chunk about payment API appears near a contribution question). The sweet spot depends on your document structure.
@@ -232,6 +291,13 @@ for i, c in enumerate(hyb):
     print(f"  [{i+1}] {c.strip().split(chr(10))[0]}")
 ```
 
+**Java:**
+
+```java
+java.util.List<String> vec = rag.retrieve("error 408", 5);
+java.util.List<String> hyb = rag.hybridSearch("error 408", 5);
+```
+
 With 8 documents, the top-5 may be identical. With 50+ docs, BM25 surfaces keyword matches that vector ignores. The demo script (`scripts/week-03/demo-04-hybrid-search.py`) uses mock data to make the difference visually clear.
 
 ---
@@ -244,6 +310,8 @@ With 8 documents, the top-5 may be identical. With 50+ docs, BM25 surfaces keywo
 - [ ] `grounded_answer_with_chunks()` returns both the answer and the retrieved chunks
 - [ ] Chunk size 256 produces more chunks than chunk size 1024
 - [ ] `hybrid_search()` returns different results than `retrieve()` on keyword-heavy queries
+
+> Java uses the same criteria with camelCase names: `indexDocuments()`, `retrieve()`, `hybridSearch()`, `groundedAnswer()`, `groundedAnswerWithChunks()`.
 
 ---
 
@@ -259,6 +327,10 @@ With 8 documents, the top-5 may be identical. With 50+ docs, BM25 surfaces keywo
 | `ERR_MODULE_NOT_FOUND: @langchain/qdrant` | Run `npm install --legacy-peer-deps` from `nodejs/` |
 | `ERR_MODULE_NOT_FOUND: onnxruntime-common` | Run `npm install --legacy-peer-deps onnxruntime-common` at the root of the `nodejs` directory. |
 | `allow-scripts` script blocked warnings (Node 26+) | Run `npm approve-scripts onnxruntime-node protobufjs sharp esbuild` and then run `npm install --legacy-peer-deps` again. |
+| `Connection refused` on Qdrant gRPC (Java) | Java uses gRPC port 6334 — ensure `docker-compose up -d` and the `6334:6334` mapping are up. |
+| Java embedding model slow first run | ~24MB ONNX model download. Let it finish. Subsequent runs are cached under `~/.cache/devbuddy/`. |
+| `mvn compile` fails to resolve dependencies | Run from `java/` with JDK 21+; the first build downloads Spring AI, DJL, and the Qdrant client. |
+| Qdrant client/server version warning | Keep `io.qdrant:client` (in `pom.xml`) in sync with the `qdrant/qdrant` image in `docker-compose.yml`. |
 
 ---
 
@@ -291,7 +363,7 @@ This is the real test: does RAG work on *your* data, not just ours?
 
 ### Part C: Break the guardrail
 
-Open `src/rag.py`. Find the `SystemMessage` in `grounded_answer()`. **Delete the line** that says:
+Open `src/rag.py` (Python) / `src/rag.js` (Node) / `RagService.java` `SYSTEM_PROMPT` (Java). Find the system prompt in `grounded_answer()`. **Delete the line** that says:
 
 > "If the context does not contain the answer, say 'I don't have information about that in my knowledge base.' Never invent information."
 
@@ -304,7 +376,7 @@ Now restore the guardrail and re-run. Document:
 
 ### Part D: Cost analysis (concrete)
 
-Run `grounded_answer()` for 10 real questions against the indexed doc set. Log tokens per call using `response.usage_metadata`. Compute the actual cost:
+Run `grounded_answer()` for 10 real questions against the indexed doc set. Log tokens per call using `response.usage_metadata` (Python) / `response.getMetadata().getUsage()` (Java). Compute the actual cost:
 
 ```
 cost = (input_tokens * 0.15 + output_tokens * 0.60) / 1_000_000
