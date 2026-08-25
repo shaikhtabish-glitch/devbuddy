@@ -26,7 +26,7 @@ def test_rag_imports_llm():
 
 
 def test_index_creates_chunks():
-    """Indexing produces chunks stored in ChromaDB."""
+    """Indexing produces chunks stored in Qdrant."""
     # Re-index to get fresh count
     count = index_documents(chunk_size=512)
     assert count >= 4, f"Expected at least 4 chunks, got {count}"
