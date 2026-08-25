@@ -19,8 +19,10 @@ curl http://localhost:6333/healthz  # → healthz check passed
 
 # 3. Install dependencies
 cd python
+python3 -m venv .venv          # recreate the venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 ### Node.js
