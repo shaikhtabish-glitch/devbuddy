@@ -19,11 +19,33 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { getLlm } from "./llm.js";
 
 // ─── Config ───────────────────────────────────────────────────
-const EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
+// Display name used in demos; the HF hub id used for download is
+// Xenova/all-MiniLM-L6-v2 (the "Xenova/" prefix is a transformers.js
+// packaging convention, not part of the model itself).
+export const EMBEDDING_MODEL = "all-MiniLM-L6-v2";
+const _EMBEDDING_MODEL_ID = "Xenova/all-MiniLM-L6-v2";
 const QDRANT_URL = process.env.QDRANT_URL || "http://localhost:6333";
 const QDRANT_COLLECTION = "devbuddy-docs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = resolve(__dirname, "..", "..", "shared", "data");
+
+// The system prompt is the guardrail: it constrains the model to the
+// retrieved context and tells it to decline out-of-corpus questions.
+export const SYSTEM_PROMPT =
+  "You are a knowledge base assistant. Answer the user's question " +
+  "using ONLY the provided context below. If the context does not " +
+  "contain the answer, say 'I don't have information about that in " +
+  "my knowledge base.' Never invent information.\n\n" +
+  "CONTEXT:\n" +
+  "{context}";
+
+// The SAME prompt with the guardrail removed — used to show what happens
+// without it (the model is no longer told to decline).
+export const NO_GUARDRAIL_PROMPT =
+  "You are a knowledge base assistant. Answer the user's question " +
+  "using the provided context below.\n\n" +
+  "CONTEXT:\n" +
+  "{context}";
 
 let _embeddings = null;
 let _vectorstore = null;
@@ -34,7 +56,7 @@ let _documents = null;
 async function _getEmbeddings() {
   if (!_embeddings) {
     _embeddings = new HuggingFaceTransformersEmbeddings({
-      model: EMBEDDING_MODEL,
+      model: _EMBEDDING_MODEL_ID,
     });
   }
   return _embeddings;
@@ -135,6 +157,40 @@ export async function retrieve(query, k = 3) {
 }
 
 /**
+ * Embed a single piece of text into a vector (for inspection / demos).
+ *
+ * @param {string} text - The text to embed.
+ * @returns {Promise<number[]>} The embedding vector.
+ */
+export async function embedText(text) {
+  const emb = await _getEmbeddings();
+  return emb.embedQuery(text);
+}
+
+/**
+ * Retrieve the top-k chunks together with their source document names.
+ *
+ * @param {string} query - The search query.
+ * @param {number} [k=3] - Number of chunks to return.
+ * @returns {Promise<Array<{content: string, source: string}>>}
+ *   List of { content, source }, most relevant first.
+ */
+export async function retrieveWithSources(query, k = 3) {
+  if (!_vectorstore || !_documents) {
+    throw new Error("No index found. Run indexDocuments() first.");
+  }
+  const results = await _vectorstore.similaritySearch(query, k);
+  const sources = {};
+  for (const doc of _documents) {
+    sources[doc.pageContent] = doc.metadata?.source || "unknown";
+  }
+  return results.map((doc) => ({
+    content: doc.pageContent,
+    source: sources[doc.pageContent] || doc.metadata?.source || "unknown",
+  }));
+}
+
+/**
  * Retrieve using BM25 (keyword) + vector (semantic) and merge via RRF.
  *
  * BM25 catches exact names, IDs, error codes. Vector catches meaning.
@@ -145,20 +201,42 @@ export async function retrieve(query, k = 3) {
  * @returns {Promise<string[]>} List of chunk content strings, merged via RRF.
  */
 export async function hybridSearch(query, k = 3) {
+  const results = await hybridSearchWithScores(query, k);
+  return results.map((r) => r.content);
+}
+
+/**
+ * hybridSearch() plus the internals: for every final hit, report its
+ * rank in EACH retriever (null = that retriever never ranked it) and
+ * the fused RRF score.
+ *
+ * RRF (reciprocal rank fusion): score = sum over retrievers of
+ * 1 / (60 + rank). A chunk ranked #1 by BM25 and #7 by vector scores
+ * 1/61 + 1/67 — which is why exact-ID matches jump to the top.
+ *
+ * @param {string} query - The search query.
+ * @param {number} [k=3] - Number of chunks to return after merging.
+ * @returns {Promise<Array<{content: string, source: string, vecRank: number|null, bm25Rank: number|null, rrfScore: number}>>}
+ *   Fused results with per-retriever ranks.
+ */
+export async function hybridSearchWithScores(query, k = 3) {
   if (!_vectorstore || !_documents) {
     throw new Error("No index found. Run indexDocuments() first.");
   }
 
-  // Vector results
+  // Per-retriever candidate lists (top k*2 each). A chunk that one side
+  // misses entirely is a "blind spot" — reported as a null rank.
   const vecResults = await _vectorstore.similaritySearch(query, k * 2);
   const vecChunks = vecResults.map((doc) => doc.pageContent);
-
-  // BM25: simple keyword-based retrieval on the loaded documents
   const bm25Chunks = _bm25Search(query, _documents, k * 2);
 
-  // Reciprocal Rank Fusion
+  const sources = {};
+  for (const doc of _documents) {
+    sources[doc.pageContent] = doc.metadata?.source || "unknown";
+  }
+
+  const K = 60; // RRF constant: damps rank contributions; no tuning needed
   const rrfScores = {};
-  const K = 60;
 
   vecChunks.forEach((chunk, i) => {
     const rank = i + 1;
@@ -169,8 +247,16 @@ export async function hybridSearch(query, k = 3) {
     rrfScores[chunk] = (rrfScores[chunk] || 0) + 1.0 / (K + rank);
   });
 
-  const sorted = Object.entries(rrfScores).sort((a, b) => b[1] - a[1]);
-  return sorted.slice(0, k).map(([chunk]) => chunk);
+  return Object.entries(rrfScores)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, k)
+    .map(([chunk, score]) => ({
+      content: chunk,
+      source: sources[chunk] || "unknown",
+      vecRank: vecChunks.indexOf(chunk) + 1 || null,
+      bm25Rank: bm25Chunks.indexOf(chunk) + 1 || null,
+      rrfScore: score,
+    }));
 }
 
 /**
@@ -196,6 +282,56 @@ function _bm25Search(query, documents, k) {
 }
 
 /**
+ * The "augment + generate" step: inject ALREADY-RETRIEVED chunks into a
+ * system prompt and ask the LLM to answer. The system prompt is the
+ * guardrail — pass SYSTEM_PROMPT to ground, or NO_GUARDRAIL_PROMPT to see
+ * what the model does without it.
+ *
+ * Kept separate from retrieval so callers can inspect (and display) the
+ * exact chunks that ground the answer before sending them to the model.
+ *
+ * @param {string} query - The user's question.
+ * @param {string[]} chunks - Pre-retrieved chunk contents (from retrieve / hybridSearch).
+ * @param {string} [systemPrompt=SYSTEM_PROMPT] - Prompt template (must contain a {context} slot).
+ * @param {number} [temperature=0.0] - 0.0 for deterministic output.
+ * @param {number} [maxTokens=500] - Max tokens in LLM response.
+ * @returns {Promise<string>} The LLM's answer.
+ */
+export async function answerWithContext(
+  query,
+  chunks,
+  systemPrompt = SYSTEM_PROMPT,
+  temperature = 0.0,
+  maxTokens = 500
+) {
+  const context = chunks.join("\n\n---\n\n");
+  const llm = getLlm({ temperature, maxTokens });
+  const response = await llm.invoke([
+    new SystemMessage(systemPrompt.replace("{context}", context)),
+    new HumanMessage(query),
+  ]);
+  return response.content.trim();
+}
+
+/**
+ * Ground an answer using SYSTEM_PROMPT (the guardrail). See answerWithContext.
+ *
+ * @param {string} query - The user's question.
+ * @param {string[]} chunks - Pre-retrieved chunk contents.
+ * @param {number} [temperature=0.0] - 0.0 for deterministic output.
+ * @param {number} [maxTokens=500] - Max tokens in LLM response.
+ * @returns {Promise<string>} The LLM's answer.
+ */
+export async function groundedAnswerFromChunks(
+  query,
+  chunks,
+  temperature = 0.0,
+  maxTokens = 500
+) {
+  return answerWithContext(query, chunks, SYSTEM_PROMPT, temperature, maxTokens);
+}
+
+/**
  * Answer a question grounded in the retrieved context.
  *
  * Retrieves top-k chunks, injects them into the prompt, and asks the LLM
@@ -209,22 +345,7 @@ function _bm25Search(query, documents, k) {
  */
 export async function groundedAnswer(query, k = 3, temperature = 0.0, maxTokens = 500) {
   const chunks = await retrieve(query, k);
-  const context = chunks.join("\n\n---\n\n");
-
-  const llm = getLlm({ temperature, maxTokens });
-  const response = await llm.invoke([
-    new SystemMessage(
-      "You are a knowledge base assistant. Answer the user's question " +
-        "using ONLY the provided context below. If the context does not " +
-        "contain the answer, say 'I don't have information about that in " +
-        "my knowledge base.' Never invent information.\n\n" +
-        "CONTEXT:\n" +
-        context
-    ),
-    new HumanMessage(query),
-  ]);
-
-  return response.content.trim();
+  return groundedAnswerFromChunks(query, chunks, temperature, maxTokens);
 }
 
 /**
@@ -244,20 +365,6 @@ export async function groundedAnswerWithChunks(
   maxTokens = 500
 ) {
   const chunks = await retrieve(query, k);
-  const context = chunks.join("\n\n---\n\n");
-
-  const llm = getLlm({ temperature, maxTokens });
-  const response = await llm.invoke([
-    new SystemMessage(
-      "You are a knowledge base assistant. Answer the user's question " +
-        "using ONLY the provided context below. If the context does not " +
-        "contain the answer, say 'I don't have information about that in " +
-        "my knowledge base.' Never invent information.\n\n" +
-        "CONTEXT:\n" +
-        context
-    ),
-    new HumanMessage(query),
-  ]);
-
-  return [response.content.trim(), chunks];
+  const answer = await groundedAnswerFromChunks(query, chunks, temperature, maxTokens);
+  return [answer, chunks];
 }
