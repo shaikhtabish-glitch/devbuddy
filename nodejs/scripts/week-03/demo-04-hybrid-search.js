@@ -8,7 +8,10 @@
  *
  * Run: node scripts/week-03/demo-04-hybrid-search.js
  */
+import readline from "readline/promises";
+import { stdin as input, stdout as output } from "process";
 import {
+  RRF_K,
   hybridSearchWithScores,
   indexDocuments,
   retrieve,
@@ -21,16 +24,27 @@ const QUERIES = [
   ["how do I set up DevBuddy?", "natural language"],
   ["INC-799", "exact ticket ID"],
 ];
-const K = 60; // the RRF constant, must match the one in src/rag.js
 
 const firstLine = (text) => text.trim().split("\n")[0];
 
 /** One retriever's contribution to the fused score (0 if it missed the chunk). */
-const rrf = (rank) => (rank ? 1.0 / (K + rank) : 0.0);
+const rrf = (rank) => (rank ? 1.0 / (RRF_K + rank) : 0.0);
+
+async function pause(msg = "  ⏸  Press Enter to continue… ") {
+  if (!process.stdin.isTTY) return;
+  const rl = readline.createInterface({ input, output });
+  await rl.question(msg);
+  rl.close();
+}
 
 console.log("=".repeat(72));
 console.log("  Demo 4: Hybrid Search — the RRF fusion table");
 console.log("=".repeat(72));
+console.log();
+
+console.log("  ⏸  PAUSE & PREDICT: for 'INC-799', will vector-only find the");
+console.log("     exact ticket? Will hybrid rank it #1? Guess before reading.");
+await pause();
 console.log();
 
 for (const [question, kind] of QUERIES) {
@@ -49,7 +63,7 @@ for (const [question, kind] of QUERIES) {
   console.log("  ▸ THE FUSION TABLE — how hybrid re-ranks the results.");
   console.log("    vec = rank in the vector top-10, bm25 = rank in the BM25 top-10,");
   console.log("    '—' = that retriever never ranked this chunk (a blind spot).");
-  console.log("    rrf = sum of 1/(60 + rank) across both sides.");
+  console.log(`    rrf = sum of 1/(${RRF_K} + rank) across both sides.`);
   console.log();
   fused.forEach((r, i) => {
     const vr = r.vecRank ? String(r.vecRank) : "—";
@@ -70,10 +84,10 @@ for (const [question, kind] of QUERIES) {
       const vr = r.vecRank ? String(r.vecRank) : "—";
       const br = r.bm25Rank ? String(r.bm25Rank) : "—";
       const vc = r.vecRank
-        ? `1/${K + r.vecRank} = ${rrf(r.vecRank).toFixed(4)}`
+        ? `1/${RRF_K + r.vecRank} = ${rrf(r.vecRank).toFixed(4)}`
         : "nothing (vector missed it)";
       const bc = r.bm25Rank
-        ? `1/${K + r.bm25Rank} = ${rrf(r.bm25Rank).toFixed(4)}`
+        ? `1/${RRF_K + r.bm25Rank} = ${rrf(r.bm25Rank).toFixed(4)}`
         : "nothing (BM25 missed it)";
       console.log(`    • ${firstLine(r.content)}`);
       console.log(
@@ -96,9 +110,17 @@ console.log();
 console.log("  • Hybrid earns its keep when queries carry exact tokens:");
 console.log("    ticket IDs, error codes, service names, version strings");
 console.log('    ("INC-799", "auth-service", "v1.8.2") — terms with no');
-console.log("    semantic neighbours that vector ranking buries.");
+console.log("    semantic neighbours that vector ranking buries. It surfaces");
+console.log("    them, though RRF may not promote them to #1 when the vector");
+console.log("    side strongly disagrees.");
 console.log();
-console.log("  • RRF needs no tuning (K=60 is a good default) and BM25 is");
+console.log(`  • RRF needs no tuning (K=${RRF_K} is a good default) and BM25 is`);
 console.log("    cheap to run offline — hybrid is the safe default in");
 console.log("    production retrieval.");
+console.log();
+console.log("  YOUR TURN:");
+console.log("    • Add a query for an exact version string ('v1.8.2') or error");
+console.log("      code ('402'). Predict which retriever wins the #1 slot.");
+console.log("    • The INC-799 exact match may land below #1 because vector ranked");
+console.log("      it low. What change would push it to #1 — and what's the cost?");
 console.log("=".repeat(72));

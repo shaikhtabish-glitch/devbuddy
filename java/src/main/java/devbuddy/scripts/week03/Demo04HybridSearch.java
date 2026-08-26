@@ -17,8 +17,6 @@ import java.util.List;
  */
 public class Demo04HybridSearch {
 
-    private static final double RRF_K = 60.0; // must match RagService
-
     public static void main(String[] args) {
         // No LLM calls in this demo — build the RAG pipeline directly (no API key needed).
         try (RagService rag = new RagService(null, "openai/gpt-4o-mini",
@@ -34,6 +32,11 @@ public class Demo04HybridSearch {
             System.out.println("=".repeat(72));
             System.out.println("  Demo 4: Hybrid Search — the RRF fusion table");
             System.out.println("=".repeat(72));
+            System.out.println();
+
+            System.out.println("  ⏸  PAUSE & PREDICT: for 'INC-799', will vector-only find the");
+            System.out.println("     exact ticket? Will hybrid rank it #1? Guess before reading.");
+            pause("  ⏸  Press Enter to continue… ");
             System.out.println();
 
             for (String[] q : queries) {
@@ -54,7 +57,7 @@ public class Demo04HybridSearch {
                 System.out.println("  ▸ THE FUSION TABLE — how hybrid re-ranks the results.");
                 System.out.println("    vec = rank in the vector top-10, bm25 = rank in the BM25 top-10,");
                 System.out.println("    '—' = that retriever never ranked this chunk (a blind spot).");
-                System.out.println("    rrf = sum of 1/(60 + rank) across both sides.");
+                System.out.println("    rrf = sum of 1/(" + (int) RagService.RRF_K + " + rank) across both sides.");
                 System.out.println();
                 for (int i = 0; i < fused.size(); i++) {
                     RagService.HybridResult r = fused.get(i);
@@ -78,10 +81,10 @@ public class Demo04HybridSearch {
                         String vr = r.vecRank() != null ? String.valueOf(r.vecRank()) : "—";
                         String br = r.bm25Rank() != null ? String.valueOf(r.bm25Rank()) : "—";
                         String vc = r.vecRank() != null
-                                ? String.format("1/%d = %.4f", (int) (RRF_K + r.vecRank()), rrf(r.vecRank()))
+                                ? String.format("1/%d = %.4f", (int) (RagService.RRF_K + r.vecRank()), rrf(r.vecRank()))
                                 : "nothing (vector missed it)";
                         String bc = r.bm25Rank() != null
-                                ? String.format("1/%d = %.4f", (int) (RRF_K + r.bm25Rank()), rrf(r.bm25Rank()))
+                                ? String.format("1/%d = %.4f", (int) (RagService.RRF_K + r.bm25Rank()), rrf(r.bm25Rank()))
                                 : "nothing (BM25 missed it)";
                         System.out.println("    • " + firstLine(r.content()));
                         System.out.printf("      vector %s → %s;  BM25 %s → %s;  total rrf = %.4f%n",
@@ -102,20 +105,35 @@ public class Demo04HybridSearch {
             System.out.println("  • Hybrid earns its keep when queries carry exact tokens:");
             System.out.println("    ticket IDs, error codes, service names, version strings");
             System.out.println("    (\"INC-799\", \"auth-service\", \"v1.8.2\") — terms with no");
-            System.out.println("    semantic neighbours that vector ranking buries.");
+            System.out.println("    semantic neighbours that vector ranking buries. It surfaces");
+            System.out.println("    them, though RRF may not promote them to #1 when the vector");
+            System.out.println("    side strongly disagrees.");
             System.out.println();
-            System.out.println("  • RRF needs no tuning (K=60 is a good default) and BM25 is");
+            System.out.println("  • RRF needs no tuning (K=" + (int) RagService.RRF_K + " is a good default) and BM25 is");
             System.out.println("    cheap to run offline — hybrid is the safe default in");
             System.out.println("    production retrieval.");
+            System.out.println();
+            System.out.println("  YOUR TURN:");
+            System.out.println("    • Add a query for an exact version string ('v1.8.2') or error");
+            System.out.println("      code ('402'). Predict which retriever wins the #1 slot.");
+            System.out.println("    • The INC-799 exact match may land below #1 because vector ranked");
+            System.out.println("      it low. What change would push it to #1 — and what's the cost?");
             System.out.println("=".repeat(72));
         }
     }
 
     private static double rrf(int rank) {
-        return 1.0 / (RRF_K + rank);
+        return 1.0 / (RagService.RRF_K + rank);
     }
 
     private static String firstLine(String text) {
         return text.strip().split("\n")[0];
+    }
+
+    private static void pause(String msg) {
+        var console = System.console();
+        if (console != null) {
+            console.readLine(msg);
+        }
     }
 }

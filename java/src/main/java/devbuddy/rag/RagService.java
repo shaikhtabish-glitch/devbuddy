@@ -42,8 +42,14 @@ public class RagService implements AutoCloseable {
 
     private static final Path DEFAULT_DATA_DIR = Path.of("..", "shared", "data");
 
+    private static final java.util.regex.Pattern TOKEN_PATTERN =
+            java.util.regex.Pattern.compile("[a-z0-9]+");
+
     /** Display name of the embedding model (384-dim), matching Python/Node.js. */
     public static final String EMBEDDING_MODEL = "all-MiniLM-L6-v2";
+
+    /** RRF fusion constant — single source of truth (demo-04 references this). */
+    public static final double RRF_K = 60.0;
 
     /**
      * The system prompt is the guardrail: constrain the model to the context
@@ -60,7 +66,7 @@ public class RagService implements AutoCloseable {
      * without it (the model is no longer told to decline).
      */
     public static final String NO_GUARDRAIL_PROMPT = """
-            You are a knowledge base assistant. Answer the user's question using the provided context below.
+            You are a helpful assistant. Answer the user's question, even if you have to make reasonable assumptions. Be specific.
 
             CONTEXT:
             %s""";
@@ -86,14 +92,14 @@ public class RagService implements AutoCloseable {
     /** Answer plus the retrieved chunks that grounded it (for transparency). */
     public record GroundedResult(String answer, List<String> chunks) {}
 
-    /** A retrieved chunk together with its source document (provenance). */
-    public record RetrievedChunk(String content, String source) {}
+    /** A retrieved chunk together with its source document and similarity score. */
+    public record RetrievedChunk(String content, String source, double score) {}
 
     /**
      * A hybrid-search hit with its per-retriever ranks — makes RRF visible.
      * vecRank / bm25Rank are 1-based ranks in each retriever's candidate list
      * (top k*2); null means that retriever never ranked the chunk (a blind
-     * spot). rrfScore is the fused score, the sum of 1/(60 + rank) over both.
+     * spot). rrfScore is the fused score, the sum of 1/(RRF_K + rank) over both.
      */
     public record HybridResult(String content, String source,
                                Integer vecRank, Integer bm25Rank, double rrfScore) {}
@@ -114,6 +120,9 @@ public class RagService implements AutoCloseable {
         Path target = directory == null || directory.isBlank() ? DEFAULT_DATA_DIR : Path.of(directory);
         try {
             List<Chunk> chunks = DocumentChunker.loadAndSplit(target, chunkSize, chunkOverlap);
+            // Drop heading-only chunks: they rank high on similarity but carry
+            // no answer content (a bare "# Title" + date/owner metadata).
+            chunks = chunks.stream().filter(c -> !isTitleOnly(c.content())).toList();
             int dimension = embeddings.dimension();
 
             try (QdrantClient client = newClient()) {
@@ -163,6 +172,14 @@ public class RagService implements AutoCloseable {
      * Top-k semantic search together with each chunk's source document.
      */
     public List<RetrievedChunk> retrieveWithSources(String query, int k) {
+        return retrieveWithSources(query, k, null);
+    }
+
+    /**
+     * Top-k semantic search together with source and cosine similarity score.
+     * An optional {@code minScore} cutoff turns "best guess" into "no match".
+     */
+    public List<RetrievedChunk> retrieveWithSources(String query, int k, Double minScore) {
         requireIndexed();
         try (QdrantClient client = newClient()) {
             List<ScoredPoint> results = client.searchAsync(SearchPoints.newBuilder()
@@ -175,11 +192,16 @@ public class RagService implements AutoCloseable {
 
             List<RetrievedChunk> out = new ArrayList<>(results.size());
             for (ScoredPoint point : results) {
+                float score = point.getScore();
+                if (minScore != null && score < minScore) {
+                    continue;
+                }
                 var payload = point.getPayloadMap();
                 if (payload != null && payload.containsKey("text")) {
                     out.add(new RetrievedChunk(
                             payload.get("text").getStringValue(),
-                            payload.containsKey("source") ? payload.get("source").getStringValue() : "unknown"));
+                            payload.containsKey("source") ? payload.get("source").getStringValue() : "unknown",
+                            score));
                 }
             }
             return out;
@@ -209,7 +231,7 @@ public class RagService implements AutoCloseable {
     /**
      * hybridSearch() plus the internals: for every final hit, report its rank
      * in EACH retriever (null = that retriever never ranked it) and the fused
-     * RRF score. RRF: score = sum of 1/(60 + rank) over both rankings.
+     * RRF score. RRF: score = sum of 1/(RRF_K + rank) over both rankings.
      */
     public List<HybridResult> hybridSearchWithScores(String query, int k) {
         requireIndexed();
@@ -217,12 +239,11 @@ public class RagService implements AutoCloseable {
         List<RetrievedChunk> bm25Chunks = bm25(query, k * 2);
 
         Map<String, Double> scores = new HashMap<>();
-        final double rrfK = 60.0;
         for (int i = 0; i < vectorChunks.size(); i++) {
-            scores.merge(vectorChunks.get(i).content(), 1.0 / (rrfK + i + 1), Double::sum);
+            scores.merge(vectorChunks.get(i).content(), 1.0 / (RRF_K + i + 1), Double::sum);
         }
         for (int i = 0; i < bm25Chunks.size(); i++) {
-            scores.merge(bm25Chunks.get(i).content(), 1.0 / (rrfK + i + 1), Double::sum);
+            scores.merge(bm25Chunks.get(i).content(), 1.0 / (RRF_K + i + 1), Double::sum);
         }
 
         Map<String, String> sources = new HashMap<>();
@@ -251,27 +272,33 @@ public class RagService implements AutoCloseable {
         return null;
     }
 
+    /** True if a chunk is only a heading + blockquote metadata (no body). */
+    private static boolean isTitleOnly(String text) {
+        int wordCount = 0;
+        for (String line : text.split("\n")) {
+            String stripped = line.strip();
+            if (stripped.isEmpty() || stripped.startsWith("#") || stripped.startsWith(">")) {
+                continue;
+            }
+            wordCount += stripped.split("\\s+").length;
+        }
+        return wordCount < 8;
+    }
+
     /** Simple in-memory BM25-style keyword scoring (mirrors Node.js). */
     private List<RetrievedChunk> bm25(String query, int k) {
-        String[] terms = query.toLowerCase().split("\\s+");
+        List<String> queryTokens = tokenize(query);
         record Scored(RetrievedChunk chunk, int score) {}
 
         List<Scored> scored = new ArrayList<>(documents.size());
         for (Chunk doc : documents) {
-            String text = doc.content().toLowerCase();
+            List<String> docTokens = tokenize(doc.content());
             int score = 0;
-            for (String term : terms) {
-                if (term.isEmpty()) {
-                    continue;
-                }
-                int idx = 0;
-                while ((idx = text.indexOf(term, idx)) >= 0) {
-                    score++;
-                    idx += term.length();
-                }
+            for (String term : queryTokens) {
+                score += (int) docTokens.stream().filter(term::equals).count();
             }
             if (score > 0) {
-                scored.add(new Scored(new RetrievedChunk(doc.content(), doc.source()), score));
+                scored.add(new Scored(new RetrievedChunk(doc.content(), doc.source(), 0.0), score));
             }
         }
 
@@ -280,6 +307,16 @@ public class RagService implements AutoCloseable {
                 .limit(k)
                 .map(Scored::chunk)
                 .toList();
+    }
+
+    /** Lowercase and split on non-alphanumerics so "INC-799" matches "inc" + "799". */
+    private static List<String> tokenize(String text) {
+        List<String> tokens = new ArrayList<>();
+        var matcher = TOKEN_PATTERN.matcher(text.toLowerCase());
+        while (matcher.find()) {
+            tokens.add(matcher.group());
+        }
+        return tokens;
     }
 
     // ─── Grounded answers ─────────────────────────────────────

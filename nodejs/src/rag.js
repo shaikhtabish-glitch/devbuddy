@@ -29,6 +29,9 @@ const QDRANT_COLLECTION = "devbuddy-docs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = resolve(__dirname, "..", "..", "shared", "data");
 
+// RRF fusion constant — single source of truth (demo-04 imports this).
+export const RRF_K = 60;
+
 // The system prompt is the guardrail: it constrains the model to the
 // retrieved context and tells it to decline out-of-corpus questions.
 export const SYSTEM_PROMPT =
@@ -42,8 +45,8 @@ export const SYSTEM_PROMPT =
 // The SAME prompt with the guardrail removed — used to show what happens
 // without it (the model is no longer told to decline).
 export const NO_GUARDRAIL_PROMPT =
-  "You are a knowledge base assistant. Answer the user's question " +
-  "using the provided context below.\n\n" +
+  "You are a helpful assistant. Answer the user's question, even if you " +
+  "have to make reasonable assumptions. Be specific.\n\n" +
   "CONTEXT:\n" +
   "{context}";
 
@@ -60,6 +63,26 @@ async function _getEmbeddings() {
     });
   }
   return _embeddings;
+}
+
+function _tokenize(text) {
+  return text.toLowerCase().match(/[a-z0-9]+/g) || [];
+}
+
+function _isTitleOnly(text) {
+  /**
+   * True if a chunk is only a heading + blockquote metadata (no body).
+   * Header chunks score high in vector search but carry no answer content.
+   */
+  const bodyWords = [];
+  for (const line of text.split("\n")) {
+    const stripped = line.trim();
+    if (!stripped || stripped.startsWith("#") || stripped.startsWith(">")) {
+      continue;
+    }
+    bodyWords.push(...stripped.split(/\s+/));
+  }
+  return bodyWords.length < 8;
 }
 
 function _loadDocuments(directory) {
@@ -119,7 +142,9 @@ export async function indexDocuments(
     separators: ["\n# ", "\n## ", "\n### ", "\n#### ", "\n", " ", ""],
   });
 
-  const chunks = await splitter.splitDocuments(docs);
+  const chunks = (await splitter.splitDocuments(docs)).filter(
+    (chunk) => !_isTitleOnly(chunk.pageContent)
+  );
 
   const emb = await _getEmbeddings();
 
@@ -175,18 +200,22 @@ export async function embedText(text) {
  * @returns {Promise<Array<{content: string, source: string}>>}
  *   List of { content, source }, most relevant first.
  */
-export async function retrieveWithSources(query, k = 3) {
+export async function retrieveWithSources(query, k = 3, minScore = null) {
   if (!_vectorstore || !_documents) {
     throw new Error("No index found. Run indexDocuments() first.");
   }
-  const results = await _vectorstore.similaritySearch(query, k);
+  let results = await _vectorstore.similaritySearchWithScore(query, k);
+  if (minScore != null) {
+    results = results.filter(([, score]) => score >= minScore);
+  }
   const sources = {};
   for (const doc of _documents) {
     sources[doc.pageContent] = doc.metadata?.source || "unknown";
   }
-  return results.map((doc) => ({
+  return results.map(([doc, score]) => ({
     content: doc.pageContent,
     source: sources[doc.pageContent] || doc.metadata?.source || "unknown",
+    score,
   }));
 }
 
@@ -211,8 +240,9 @@ export async function hybridSearch(query, k = 3) {
  * the fused RRF score.
  *
  * RRF (reciprocal rank fusion): score = sum over retrievers of
- * 1 / (60 + rank). A chunk ranked #1 by BM25 and #7 by vector scores
- * 1/61 + 1/67 — which is why exact-ID matches jump to the top.
+ * 1 / (RRF_K + rank). A chunk ranked #1 by BM25 and #7 by vector scores
+ * 1/61 + 1/67 — which is why a hit one side ranks #1 can still surface
+ * even when the other side ranks it lower.
  *
  * @param {string} query - The search query.
  * @param {number} [k=3] - Number of chunks to return after merging.
@@ -235,16 +265,15 @@ export async function hybridSearchWithScores(query, k = 3) {
     sources[doc.pageContent] = doc.metadata?.source || "unknown";
   }
 
-  const K = 60; // RRF constant: damps rank contributions; no tuning needed
   const rrfScores = {};
 
   vecChunks.forEach((chunk, i) => {
     const rank = i + 1;
-    rrfScores[chunk] = (rrfScores[chunk] || 0) + 1.0 / (K + rank);
+    rrfScores[chunk] = (rrfScores[chunk] || 0) + 1.0 / (RRF_K + rank);
   });
   bm25Chunks.forEach((chunk, i) => {
     const rank = i + 1;
-    rrfScores[chunk] = (rrfScores[chunk] || 0) + 1.0 / (K + rank);
+    rrfScores[chunk] = (rrfScores[chunk] || 0) + 1.0 / (RRF_K + rank);
   });
 
   return Object.entries(rrfScores)
@@ -261,18 +290,16 @@ export async function hybridSearchWithScores(query, k = 3) {
 
 /**
  * Simple BM25-inspired keyword search.
- * Scores documents by term frequency of query words.
+ * Scores documents by term frequency of query words (lowercased, split on
+ * non-alphanumerics so "INC-799" matches "inc" + "799").
  */
 function _bm25Search(query, documents, k) {
-  const queryTerms = query.toLowerCase().split(/\s+/);
+  const queryTokens = _tokenize(query);
   const scored = documents.map((doc) => {
-    const text = doc.pageContent.toLowerCase();
+    const docTokens = _tokenize(doc.pageContent);
     let score = 0;
-    for (const term of queryTerms) {
-      // Count occurrences
-      const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-      const matches = text.match(regex);
-      if (matches) score += matches.length;
+    for (const term of queryTokens) {
+      score += docTokens.filter((t) => t === term).length;
     }
     return { text: doc.pageContent, score };
   });

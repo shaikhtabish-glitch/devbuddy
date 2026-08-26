@@ -11,6 +11,8 @@
  *
  * Run: node scripts/week-03/demo-03-chunk-size.js
  */
+import readline from "readline/promises";
+import { stdin as input, stdout as output } from "process";
 import { indexDocuments, retrieveWithSources } from "../../src/rag.js";
 
 const QUESTION = "How do I set up DevBuddy?";
@@ -20,7 +22,12 @@ const ANSWER_DOC = "CONTRIBUTING.md";
 const K = 3;
 const SIZES = [256, 512, 1024];
 
-const firstLine = (text) => text.trim().split("\n")[0];
+async function pause(msg = "  ⏸  Press Enter to continue… ") {
+  if (!process.stdin.isTTY) return;
+  const rl = readline.createInterface({ input, output });
+  await rl.question(msg);
+  rl.close();
+}
 
 console.log("=".repeat(72));
 console.log("  Demo 3: Chunk Size — Same Question, Different Retrieval");
@@ -39,22 +46,22 @@ console.log();
 //
 // The retriever is a top-k nearest-neighbour search: it must return exactly
 // K chunks and has NO relevance gate. For this question the genuinely close
-// chunks are all in CONTRIBUTING.md (scores ~0.40 / 0.25 / 0.24). Once those
-// run out, slot K gets filled by whatever is vector-closest next — and that
-// is payment-api-spec.md at ~0.17 (incident-log is ~0.10, lower still).
+// chunks are all in CONTRIBUTING.md (see the scores printed below). Once
+// those run out, slot K gets filled by whatever is vector-closest next — and
+// that is payment-api-spec.md.
 //
-// "Closest in embedding space" ≠ "topically relevant". The score cliff
-// (0.40 → 0.17) is the retriever's way of saying "best I have left".
+// "Closest in embedding space" ≠ "topically relevant". The score cliff is
+// the retriever's way of saying "best I have left".
 //
 // Chunk size decides HOW the noise leaks in:
-//   • 256/1024 → only 2 CONTRIBUTING chunks outscore payment-api-spec.md,
-//     so it slips into slot 3 (as a 199-char endpoint shard or the whole
-//     828-char spec).
-//   • 512      → exactly 3 CONTRIBUTING chunks outscore it, so it lands at
-//     slot 4 and stays invisible.
-//
-// The chunk itself doesn't get more relevant — chunk size just reshuffles
-// which chunks exist, and a vacant top-K slot gets filled with noise.
+//   • 256 → a payment-api chunk slips into the top-3 next to the right doc.
+//   • 1024 → the whole 828-char payment spec rides along in slot 3.
+//   • 512 → the top-3 all come from CONTRIBUTING.md.
+console.log("  ⏸  PAUSE & PREDICT: at which chunk size does a non-CONTRIBUTING");
+console.log("     document first leak into the top-3? Guess before reading.");
+await pause();
+console.log();
+
 const summary = [];
 
 for (const size of SIZES) {
@@ -73,7 +80,7 @@ for (const size of SIZES) {
   chunks.forEach((chunk, i) => {
     const note = chunk.source === ANSWER_DOC ? "" : "   ← other document";
     console.log(
-      `  [${i + 1}] ${chunk.source}  (${chunk.content.length} chars)${note}`
+      `  [${i + 1}] ${chunk.source}  (${chunk.content.length} chars, score=${chunk.score.toFixed(3)})${note}`
     );
     console.log(`      ${chunk.content}`);
     console.log();
@@ -100,10 +107,16 @@ for (const { size, count, avgLen } of summary) {
 console.log();
 console.log("  The tradeoff, in general:");
 console.log("    smaller → more chunks, each tighter, but context can be split");
-console.log("              (e.g. a bare '# Title' with no body).");
+console.log("              (e.g. a heading separated from its body).");
 console.log("    larger  → fewer chunks, but unrelated content can ride along");
 console.log("              (e.g. a whole payment API spec in a setup answer).");
 console.log();
 console.log("  Look back at the sources and lengths above and decide where the");
 console.log("  balance sits for THESE documents. There is no universal answer.");
+console.log();
+console.log("  YOUR TURN:");
+console.log("    • Change QUESTION to 'What is the payment API SLA?' and re-run.");
+console.log("      Which chunk size keeps the answer self-contained? Why?");
+console.log("    • Add chunk_size=2048 to SIZES. Predict what happens to the");
+console.log("      'unrelated content rides along' problem before you run.");
 console.log("=".repeat(72));
