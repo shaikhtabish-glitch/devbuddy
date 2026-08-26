@@ -1,12 +1,16 @@
 """
 Demo 2: Hallucinate → Ground
 
-The system prompt is the guardrail. This demo proves it by holding the
-question AND the retrieved chunks fixed, and changing only the system prompt:
+The system prompt is the guardrail. This demo holds the question AND the
+retrieved chunks fixed and changes only the system prompt, then classifies
+what the model actually does:
 
-  1. OUT-OF-CORPUS + guardrail   → the model declines
-  2. OUT-OF-CORPUS, no guardrail → the model hallucinates
-  3. IN-CORPUS + guardrail       → the model answers from the chunks
+  1. OUT-OF-CORPUS + guardrail   → expected: the model declines
+  2. OUT-OF-CORPUS, no guardrail → expected: it may invent an answer
+  3. IN-CORPUS + guardrail       → expected: the model answers from chunks
+
+The demo prints a Verdict for each answer instead of assuming a narrative —
+the actual behaviour depends on the model in .env, so classify, don't assert.
 
 Run: python scripts/week-03/demo-02-hallucinate-ground.py
 """
@@ -28,6 +32,38 @@ IN_CORPUS = "How do I contribute code to DevBuddy?"
 K = 3
 BORDER = "=" * 72
 
+
+def classify_answer(answer: str, chunks: list[str]) -> str:
+    """Classify what the model actually did, instead of asserting a narrative."""
+    joined = "\n".join(chunks).lower()
+    low = answer.lower()
+    # Refusal signals — checked first: a refusal that echoes the question's
+    # terms ("revenue forecast for Q4 2028") is still a refusal, not a
+    # hallucination.
+    if any(t in low for t in (
+        "don't have information", "don't have any information",
+        "do not have information", "does not contain", "no information",
+        "no financial", "i don't know", "cannot answer", "can't answer",
+    )):
+        return "REFUSAL — declines to answer"
+    # Question terms absent from context: the model can only assert them by
+    # inventing them.
+    if any(t in low for t in ("revenue", "forecast", "2028", "q4")) and "2028" not in joined:
+        return "HALLUCINATION — claims something the context never mentions"
+    return "GROUNDED / OTHER — answer appears tied to context"
+
+
+def pause(prompt: str = "  ⏸  Press Enter to continue… ") -> None:
+    """Pause so the learner can predict before the reveal.
+
+    Non-interactive runs (piped/CI stdin) skip the pause instead of hanging.
+    """
+    try:
+        input(prompt)
+    except EOFError:
+        print()
+
+
 print(BORDER)
 print("  Demo 2: Hallucinate → Ground")
 print(BORDER)
@@ -45,8 +81,9 @@ print()
 # returns k chunks and has no "not found" concept and no relevance
 # cutoff. For this question the query vector points into an empty
 # region of vector space, so the "nearest" chunks are still far away
-# (scores ~0.30 / 0.27 / 0.22, vs ~0.60 for an in-corpus question)
-# and happen to be about payments, incidents and SLAs.
+# (see the scores printed below — roughly 0.28 / 0.26 / 0.21, versus
+# ~0.60 for an in-corpus question) and happen to be about payments,
+# incidents and SLAs.
 #
 # Similarity is a RELATIVE ranking, not an ABSOLUTE relevance
 # judgement: Qdrant sorts everything by distance and hands back the
@@ -59,11 +96,20 @@ print("  of them answer the question:")
 print()
 chunks = retrieve_with_sources(OUT_OF_CORPUS, k=K)
 for i, c in enumerate(chunks, 1):
-    print(f"  [{i}] {c.source}")
+    print(f"  [{i}] {c.source}  (score={c.score:.3f})")
     print(f"      {c.content}")
     print()
 print('  None of these mention Q4 2028 revenue. Retrieval can\'t return')
 print('  "nothing" — it returns its best (irrelevant) guess.')
+print()
+
+# ── The relevance gate ────────────────────────────────────────
+print("  ── The relevance gate (min_score) ────────────────────────")
+print()
+print("  Now set a cutoff: min_score=0.35. The same query returns")
+gated = retrieve_with_sources(OUT_OF_CORPUS, k=K, min_score=0.35)
+print(f"  {len(gated)} chunk(s) — 'no match' becomes a first-class answer")
+print("  instead of a best guess.")
 print()
 
 # ── With the guardrail ────────────────────────────────────────
@@ -77,18 +123,24 @@ for line in SYSTEM_PROMPT.format(context=f"<the {K} chunks above>").splitlines()
 print()
 guarded = answer_with_context(OUT_OF_CORPUS, [c.content for c in chunks], SYSTEM_PROMPT)
 print(f"  Answer: {guarded}")
+print(f"  Verdict: {classify_answer(guarded, [c.content for c in chunks])}")
 print()
 
 # ── Without the guardrail ─────────────────────────────────────
 print("  ── Without the guardrail ────────────────────────────────")
 print()
-print("  Same question, same chunks — but the decline instruction is gone:")
+print("  Same question, same chunks — but the prompt no longer grounds the")
+print("  model to the context and invites it to make assumptions.")
+print()
+print("  ⏸  PAUSE & PREDICT: will it invent an answer, or refuse anyway?")
+pause()
 print()
 for line in NO_GUARDRAIL_PROMPT.format(context=f"<the {K} chunks above>").splitlines():
     print(f"  │ {line}")
 print()
 unguarded = answer_with_context(OUT_OF_CORPUS, [c.content for c in chunks], NO_GUARDRAIL_PROMPT)
 print(f"  Answer: {unguarded}")
+print(f"  Verdict: {classify_answer(unguarded, [c.content for c in chunks])}")
 print()
 
 # ── In-corpus ─────────────────────────────────────────────────
@@ -98,14 +150,25 @@ print(f'  Question: "{IN_CORPUS}"')
 print()
 grounded_chunks = retrieve_with_sources(IN_CORPUS, k=K)
 for i, c in enumerate(grounded_chunks, 1):
-    print(f"  [{i}] {c.source}")
+    print(f"  [{i}] {c.source}  (score={c.score:.3f})")
     print(f"      {c.content}")
     print()
 grounded = answer_with_context(IN_CORPUS, [c.content for c in grounded_chunks], SYSTEM_PROMPT)
 print(f"  Answer: {grounded}")
+print(f"  Verdict: {classify_answer(grounded, [c.content for c in grounded_chunks])}")
 print()
 
 print(BORDER)
 print("  Same retriever. Same chunks. Only the system prompt changed.")
-print("  The guardrail is what separates a hallucination from a refusal.")
+print("  Read the Verdict lines above: with the current model the guarded")
+print("  prompt produces a terse refusal, while the unguarded prompt may")
+print("  refuse more helpfully or — if the model follows the invitation —")
+print("  invent an answer. Classify, don't assume.")
+print()
+print("  YOUR TURN:")
+print("    • Change OUT_OF_CORPUS to something plausible but absent")
+print("      (e.g. 'What is the auth-service SLA?') and re-run. Predict")
+print("      the verdict for each prompt before reading it.")
+print("    • Point .env at a smaller local model. Does the unguarded")
+print("      prompt finally hallucinate? Why does model size matter here?")
 print(BORDER)

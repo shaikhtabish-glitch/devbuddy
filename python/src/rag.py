@@ -8,6 +8,7 @@ Hybrid search with BM25 + vector for exact keyword matching.
 Imports: from src.llm import get_llm
 """
 import os
+import re
 from dataclasses import dataclass
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -27,6 +28,9 @@ QDRANT_URL = os.environ.get("QDRANT_URL", "http://localhost:6333")
 QDRANT_COLLECTION = "devbuddy-docs"
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "shared", "data")
 
+# RRF fusion constant — single source of truth (demo-04 imports this).
+RRF_K = 60
+
 # The system prompt is the guardrail: it constrains the model to the
 # retrieved context and tells it to decline out-of-corpus questions.
 SYSTEM_PROMPT = (
@@ -41,8 +45,8 @@ SYSTEM_PROMPT = (
 # The SAME prompt with the guardrail removed — used to show what happens
 # without it (the model is no longer told to decline).
 NO_GUARDRAIL_PROMPT = (
-    "You are a knowledge base assistant. Answer the user's question "
-    "using the provided context below.\n\n"
+    "You are a helpful assistant. Answer the user's question, even if you "
+    "have to make reasonable assumptions. Be specific.\n\n"
     "CONTEXT:\n"
     "{context}"
 )
@@ -54,6 +58,7 @@ class RetrievedChunk:
 
     content: str
     source: str
+    score: float
 
 
 @dataclass
@@ -62,7 +67,7 @@ class HybridResult:
 
     vec_rank / bm25_rank are 1-based ranks in each retriever's candidate
     list (top k*2); None means that retriever never ranked the chunk (a
-    blind spot). rrf_score is the fused score, the sum of 1/(60 + rank)
+    blind spot). rrf_score is the fused score, the sum of 1/(RRF_K + rank)
     over both lists.
     """
 
@@ -84,6 +89,34 @@ def _get_embeddings() -> HuggingFaceEmbeddings:
     if _embeddings is None:
         _embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
     return _embeddings
+
+
+def _bm25_tokenize(text: str) -> list[str]:
+    """Lowercase and split on non-alphanumerics.
+
+    The default BM25 preprocessing is ``text.split()``, which keeps case
+    and does not split hyphens — so "INC-799" becomes a single token and
+    only chunks containing that exact string score above zero. Splitting
+    on non-alphanumerics makes "INC-799" match "inc" + "799" and fixes
+    case sensitivity (the reason exact-ID queries missed their targets).
+    """
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+def _is_title_only(text: str) -> bool:
+    """True if a chunk is only a heading + blockquote metadata (no body).
+
+    Header chunks score high in vector search but carry no answer content
+    (e.g. "# Payment API — Internal Specification" + owner/date metadata).
+    We drop them at index time so they don't crowd out the real evidence.
+    """
+    body_words: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith(">"):
+            continue
+        body_words.extend(stripped.split())
+    return len(body_words) < 8
 
 
 def embed_text(text: str) -> list[float]:
@@ -135,6 +168,10 @@ def index_documents(
     )
     chunks = splitter.split_documents(docs)
 
+    # Drop heading-only chunks: they rank high on similarity but contain no
+    # answer content (a bare "# Title" + date/owner metadata).
+    chunks = [c for c in chunks if not _is_title_only(c.page_content)]
+
     emb = _get_embeddings()
 
     # Connect to Qdrant, recreate collection with fresh vectors
@@ -183,26 +220,37 @@ def retrieve(query: str, k: int = 3) -> list[str]:
     return [doc.page_content for doc in results]
 
 
-def retrieve_with_sources(query: str, k: int = 3) -> list[RetrievedChunk]:
+def retrieve_with_sources(
+    query: str, k: int = 3, min_score: float | None = None
+) -> list[RetrievedChunk]:
     """
-    Retrieve the top-k chunks together with their source document names.
+    Retrieve the top-k chunks together with source and similarity score.
 
     Args:
         query: The search query.
         k: Number of chunks to return.
+        min_score: Optional cosine-similarity cutoff. Chunks below this
+            score are dropped. Vector search is a top-k nearest-neighbour
+            query with no "not found" concept, so without a cutoff it always
+            returns k chunks — even irrelevant ones. Set this to turn
+            "best guess" into "no match".
 
     Returns:
-        List of RetrievedChunk (content + source), most relevant first.
+        List of RetrievedChunk (content + source + score), most relevant
+        first. May be shorter than k when min_score filters results.
     """
     if _vectorstore is None:
         raise RuntimeError("No index found. Run index_documents() first.")
-    results = _vectorstore.similarity_search(query, k=k)
+    results = _vectorstore.similarity_search_with_score(query, k=k)
+    if min_score is not None:
+        results = [(doc, score) for doc, score in results if score >= min_score]
     return [
         RetrievedChunk(
             content=doc.page_content,
             source=os.path.basename(doc.metadata.get("source", "unknown")),
+            score=score,
         )
-        for doc in results
+        for doc, score in results
     ]
 
 
@@ -230,8 +278,9 @@ def hybrid_search_with_scores(query: str, k: int = 3) -> list[HybridResult]:
     the fused RRF score.
 
     RRF (reciprocal rank fusion): score = sum over retrievers of
-    1 / (60 + rank). A chunk ranked #1 by BM25 and #7 by vector scores
-    1/61 + 1/67 — which is why exact-ID matches jump to the top.
+    1 / (RRF_K + rank). A chunk ranked #1 by BM25 and #7 by vector scores
+    1/61 + 1/67 — which is why a hit one side ranks #1 can still surface
+    even when the other side ranks it lower.
 
     Args:
         query: The search query.
@@ -249,7 +298,9 @@ def hybrid_search_with_scores(query: str, k: int = 3) -> list[HybridResult]:
     vec_chunks = [
         d.page_content for d in _vectorstore.similarity_search(query, k=k * 2)
     ]
-    bm25 = BM25Retriever.from_documents(_documents, k=k * 2)
+    bm25 = BM25Retriever.from_documents(
+        _documents, k=k * 2, preprocess_func=_bm25_tokenize
+    )
     bm25_chunks = [d.page_content for d in bm25.invoke(query)]
 
     sources = {
@@ -257,14 +308,13 @@ def hybrid_search_with_scores(query: str, k: int = 3) -> list[HybridResult]:
         for d in _documents
     }
 
-    K = 60  # RRF constant: damps rank contributions; no tuning needed
     rrf_scores: dict[str, float] = {}
 
     for rank, chunk in enumerate(vec_chunks, 1):
-        rrf_scores[chunk] = rrf_scores.get(chunk, 0.0) + 1.0 / (K + rank)
+        rrf_scores[chunk] = rrf_scores.get(chunk, 0.0) + 1.0 / (RRF_K + rank)
 
     for rank, chunk in enumerate(bm25_chunks, 1):
-        rrf_scores[chunk] = rrf_scores.get(chunk, 0.0) + 1.0 / (K + rank)
+        rrf_scores[chunk] = rrf_scores.get(chunk, 0.0) + 1.0 / (RRF_K + rank)
 
     return [
         HybridResult(

@@ -13,7 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.rag import hybrid_search_with_scores, index_documents, retrieve
+from src.rag import RRF_K, hybrid_search_with_scores, index_documents, retrieve
 
 index_documents(chunk_size=512, chunk_overlap=64)
 
@@ -22,21 +22,34 @@ QUERIES = [
     ("how do I set up DevBuddy?", "natural language"),
     ("INC-799", "exact ticket ID"),
 ]
-K = 60  # the RRF constant, must match the one in src.rag
-
-
 def first_line(text: str) -> str:
     return text.strip().split("\n")[0]
 
 
 def rrf(rank: int | None) -> float:
     """One retriever's contribution to the fused score (0 if it missed the chunk)."""
-    return 1.0 / (K + rank) if rank else 0.0
+    return 1.0 / (RRF_K + rank) if rank else 0.0
+
+
+def pause(prompt: str = "  ⏸  Press Enter to continue… ") -> None:
+    """Pause so the learner can predict before the reveal.
+
+    Non-interactive runs (piped/CI stdin) skip the pause instead of hanging.
+    """
+    try:
+        input(prompt)
+    except EOFError:
+        print()
 
 
 print("=" * 72)
 print("  Demo 4: Hybrid Search — the RRF fusion table")
 print("=" * 72)
+print()
+
+print("  ⏸  PAUSE & PREDICT: for 'INC-799', will vector-only find the")
+print("     exact ticket? Will hybrid rank it #1? Guess before reading.")
+pause()
 print()
 
 for question, kind in QUERIES:
@@ -54,7 +67,7 @@ for question, kind in QUERIES:
     print("  ▸ THE FUSION TABLE — how hybrid re-ranks the results.")
     print("    vec = rank in the vector top-10, bm25 = rank in the BM25 top-10,")
     print("    '—' = that retriever never ranked this chunk (a blind spot).")
-    print("    rrf = sum of 1/(60 + rank) across both sides.")
+    print(f"    rrf = sum of 1/({RRF_K} + rank) across both sides.")
     print()
     for i, r in enumerate(fused, 1):
         vr = str(r.vec_rank) if r.vec_rank else "—"
@@ -70,8 +83,8 @@ for question, kind in QUERIES:
         for r in blind:
             vr = r.vec_rank if r.vec_rank else "—"
             br = r.bm25_rank if r.bm25_rank else "—"
-            vc = f"1/{K + r.vec_rank} = {rrf(r.vec_rank):.4f}" if r.vec_rank else "nothing (vector missed it)"
-            bc = f"1/{K + r.bm25_rank} = {rrf(r.bm25_rank):.4f}" if r.bm25_rank else "nothing (BM25 missed it)"
+            vc = f"1/{RRF_K + r.vec_rank} = {rrf(r.vec_rank):.4f}" if r.vec_rank else "nothing (vector missed it)"
+            bc = f"1/{RRF_K + r.bm25_rank} = {rrf(r.bm25_rank):.4f}" if r.bm25_rank else "nothing (BM25 missed it)"
             print(f"    • {first_line(r.content)}")
             print(f"      vector {vr} → {vc};  BM25 {br} → {bc};  total rrf = {r.rrf_score:.4f}")
         print()
@@ -87,9 +100,17 @@ print()
 print("  • Hybrid earns its keep when queries carry exact tokens:")
 print("    ticket IDs, error codes, service names, version strings")
 print("    (\"INC-799\", \"auth-service\", \"v1.8.2\") — terms with no")
-print("    semantic neighbours that vector ranking buries.")
+print("    semantic neighbours that vector ranking buries. It surfaces")
+print("    them (vector-only missed INC-799 above), though RRF may not")
+print("    promote them to #1 when the vector side strongly disagrees.")
 print()
-print("  • RRF needs no tuning (K=60 is a good default) and BM25 is")
+print("  • RRF needs no tuning (K={RRF_K} is a good default) and BM25 is")
 print("    cheap to run offline — hybrid is the safe default in")
 print("    production retrieval.")
+print()
+print("  YOUR TURN:")
+print("    • Add a query for an exact version string ('v1.8.2') or error")
+print("      code ('402'). Predict which retriever wins the #1 slot.")
+print("    • The INC-799 exact match landed at #3 because vector ranked it")
+print("      low. What change would push it to #1 — and what's the cost?")
 print("=" * 72)

@@ -25,6 +25,18 @@ ANSWER_DOC = "CONTRIBUTING.md"
 K = 3
 SIZES = [256, 512, 1024]
 
+
+def pause(prompt: str = "  ⏸  Press Enter to continue… ") -> None:
+    """Pause so the learner can predict before the reveal.
+
+    Non-interactive runs (piped/CI stdin) skip the pause instead of hanging.
+    """
+    try:
+        input(prompt)
+    except EOFError:
+        print()
+
+
 print("=" * 72)
 print("  Demo 3: Chunk Size — Same Question, Different Retrieval")
 print("=" * 72)
@@ -42,9 +54,9 @@ print()
 #
 # The retriever is a top-k nearest-neighbour search: it must return exactly
 # K chunks and has NO relevance gate. For this question the genuinely close
-# chunks are all in CONTRIBUTING.md (scores ~0.40 / 0.25 / 0.24). Once those
-# run out, slot K gets filled by whatever is vector-closest next — and that
-# is payment-api-spec.md at ~0.17 (incident-log is ~0.10, lower still).
+# chunks are all in CONTRIBUTING.md (see the scores printed below). Once
+# those run out, slot K gets filled by whatever is vector-closest next — and
+# that is payment-api-spec.md (incident-log scores lower still).
 #
 # "Closest in embedding space" ≠ "topically relevant". The score cliff
 # (0.40 → 0.17) is the retriever's way of saying "best I have left".
@@ -58,6 +70,12 @@ print()
 #
 # The chunk itself doesn't get more relevant — chunk size just reshuffles
 # which chunks exist, and a vacant top-K slot gets filled with noise.
+
+print("  ⏸  PAUSE & PREDICT: at which chunk size does a non-CONTRIBUTING")
+print("     document first leak into the top-3? Guess before reading.")
+pause()
+print()
+
 summary = []
 
 for size in SIZES:
@@ -71,7 +89,7 @@ for size in SIZES:
     print()
     for i, c in enumerate(chunks, 1):
         note = "" if c.source == ANSWER_DOC else "   ← other document"
-        print(f"  [{i}] {c.source}  ({len(c.content)} chars){note}")
+        print(f"  [{i}] {c.source}  ({len(c.content)} chars, score={c.score:.3f}){note}")
         print(f"      {c.content}")
         print()
     print()
@@ -94,4 +112,10 @@ print("              (e.g. a whole payment API spec in a setup answer).")
 print()
 print("  Look back at the sources and lengths above and decide where the")
 print("  balance sits for THESE documents. There is no universal answer.")
+print()
+print("  YOUR TURN:")
+print("    • Change QUESTION to 'What is the payment API SLA?' and re-run.")
+print("      Which chunk size keeps the answer self-contained? Why?")
+print("    • Add chunk_size=2048 to SIZES. Predict what happens to the")
+print("      'unrelated content rides along' problem before you run.")
 print("=" * 72)

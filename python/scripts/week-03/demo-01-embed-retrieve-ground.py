@@ -15,11 +15,13 @@ and the prompt the model actually receives is shown.
 Run: python scripts/week-03/demo-01-embed-retrieve-ground.py
 """
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.rag import (
+    DATA_DIR,
     EMBEDDING_MODEL,
     SYSTEM_PROMPT,
     embed_text,
@@ -32,6 +34,18 @@ QUESTION = "What endpoints does the payment API expose?"
 K = 4
 
 BORDER = "=" * 72
+
+
+def pause(prompt: str = "  ⏸  Press Enter to continue… ") -> None:
+    """Pause so the learner can predict before the reveal.
+
+    Non-interactive runs (piped/CI stdin) skip the pause instead of hanging.
+    """
+    try:
+        input(prompt)
+    except EOFError:
+        print()
+
 
 print(BORDER)
 print("  Demo 1: Embed → Retrieve → Ground")
@@ -67,14 +81,20 @@ print(f"    → {len(query_vector)}-dim vector: "
       f"{[round(v, 4) for v in query_vector[:5]]} ...")
 print()
 print(f"  Qdrant returns the {K} chunks whose vectors are closest to")
-print("  that query vector, most relevant first. The source of each")
-print("  chunk is shown so you can trace it back:")
+print("  that query vector, most relevant first. The source and similarity")
+print("  score of each chunk are shown so you can trace it back:")
 print()
 chunks = retrieve_with_sources(QUESTION, k=K)
 for i, chunk in enumerate(chunks, 1):
-    print(f"  [{i}] {chunk.source}")
+    print(f"  [{i}] {chunk.source}  (score={chunk.score:.3f})")
     print(f"      {chunk.content}")
     print()
+
+print("  ⏸  PAUSE & PREDICT:")
+print("     The payment API spec actually defines 4 endpoints. Look at the")
+print(f"     {K} chunks above — which endpoint is MISSING from the retrieval?")
+print("     Will the answer mention it? Predict, then continue.")
+pause()
 
 # ── Step 3: Ground ────────────────────────────────────────────
 print("  ── Step 3: Ground (chunks → prompt → LLM) ───────────────")
@@ -83,7 +103,7 @@ print("  The chunks above are injected VERBATIM into the system prompt")
 print("  as CONTEXT. This is the exact prompt the model receives:")
 print()
 prompt_preview = SYSTEM_PROMPT.format(
-    context=f"<the {K} chunks from Step 2, joined with '---'>"
+    context="\n\n---\n\n".join(c.content for c in chunks)
 )
 for line in prompt_preview.splitlines():
     print(f"  │ {line}")
@@ -99,8 +119,35 @@ print()
 
 # ── Verify ────────────────────────────────────────────────────
 print(BORDER)
-print("  Verify the grounding:")
-print("  every endpoint in the answer should appear in the chunks above.")
-print("  The chunks are the evidence — check them, not the model's")
-print("  confidence.")
+print("  Verify the grounding (automated):")
+context = "\n".join(c.content for c in chunks)
+claims = re.findall(r"\b(?:GET|POST|PUT|DELETE|PATCH)\s+(/[^\s,`*]+)", answer)
+if not claims:
+    print("  ⚠️  No endpoint paths detected in the answer — verify by hand.")
+else:
+    ungrounded = [path for path in claims if path.rstrip(".") not in context]
+    if ungrounded:
+        print(f"  ❌ {len(ungrounded)}/{len(claims)} endpoint claim(s) NOT in retrieved context:")
+        for path in ungrounded:
+            print(f"      - {path}")
+    else:
+        print(f"  ✅ All {len(claims)} endpoint claim(s) appear in the retrieved context.")
+
+# ── Recall check ──────────────────────────────────────────────
+print()
+print("  Recall check — grounding ≠ completeness:")
+spec_path = os.path.join(DATA_DIR, "payment-api-spec.md")
+with open(spec_path) as f:
+    spec_text = f.read()
+all_endpoints = re.findall(r"\b(?:GET|POST|PUT|DELETE|PATCH)\s+(/[^\s,`*]+)", spec_text)
+missing = [e for e in all_endpoints if e.rstrip(".") not in context]
+if missing:
+    print(f"  ⚠️  {len(missing)} of {len(all_endpoints)} spec endpoint(s) were never retrieved:")
+    for e in missing:
+        print(f"      - {e}")
+    print("     The model didn't hallucinate — it never SAW these. This is a")
+    print("     RECALL gap (retrieval missed evidence), not a grounding failure")
+    print("     (answer claims evidence that isn't there). Different bug, different fix.")
+else:
+    print(f"  ✅ All {len(all_endpoints)} spec endpoint(s) were retrieved.")
 print(BORDER)
