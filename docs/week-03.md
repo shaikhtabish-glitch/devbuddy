@@ -241,7 +241,7 @@ RagService.GroundedResult r = rag.groundedAnswerWithChunks(
         "What's the revenue forecast for Q4 2028?", 3, 0.0);  // out-of-corpus → declines
 ```
 
-The system prompt IS the guardrail. Without it, the out-of-corpus question would produce a confident hallucination. With it, the model declines. This is context engineering: you control what the model does when retrieval fails.
+The system prompt IS the guardrail. Without it, the out-of-corpus question may produce a confident hallucination — or, with a well-behaved model, may still refuse. The point: you cannot rely on the model's default behaviour; the guardrail makes the desired behaviour explicit. This is context engineering: you control what the model does when retrieval fails.
 
 ---
 
@@ -305,7 +305,7 @@ With 8 documents, the top-5 may be identical. With 50+ docs, BM25 surfaces keywo
 ---
 
 ## Acceptance Criteria
-- [ ] `index_documents()` builds a Qdrant collection from `shared/data/` (19 chunks at size=512)
+- [ ] `index_documents()` builds a Qdrant collection from `shared/data/` (17 chunks at size=512)
 - [ ] `retrieve()` returns relevant chunks for an in-corpus question
 - [ ] `grounded_answer()` produces an answer that references the retrieved documents
 - [ ] An out-of-corpus question returns "I don't have information about that" (system prompt prevents hallucination)
@@ -369,10 +369,10 @@ Open `src/rag.py` (Python) / `src/rag.js` (Node) / `RagService.java` `SYSTEM_PRO
 
 > "If the context does not contain the answer, say 'I don't have information about that in my knowledge base.' Never invent information."
 
-Re-index and ask an out-of-corpus question like *"What's the revenue forecast for Q4 2028?"* The model will now invent a confident, wrong answer. This is hallucination — the default behavior of an unguarded LLM.
+Re-index and ask an out-of-corpus question like *"What's the revenue forecast for Q4 2028?"* Depending on the model, the answer may invent a confident, wrong answer — or it may still refuse. That unpredictability is itself the lesson: without the guardrail you cannot rely on the model's default behaviour.
 
 Now restore the guardrail and re-run. Document:
-- What did the model invent with the guardrail removed?
+- What did the model do with the guardrail removed — refuse, or invent?
 - What does this tell you about deploying RAG without output validation?
 - If you had to ship a RAG feature tomorrow, would you trust the system prompt alone?
 
