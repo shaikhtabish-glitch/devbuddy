@@ -41,9 +41,19 @@ def classify_answer(answer: str, chunks: list[str]) -> str:
     # terms ("revenue forecast for Q4 2028") is still a refusal, not a
     # hallucination.
     if any(t in low for t in (
-        "don't have information", "don't have any information",
-        "do not have information", "does not contain", "no information",
-        "no financial", "i don't know", "cannot answer", "can't answer",
+        "don't have information",
+        "don't have any information",
+        "do not have information",
+        "does not contain",
+        "no information",
+        "no financial",
+        "i don't know",
+        "cannot answer",
+        "can't answer",
+        "don't have access",
+        "do not have access",
+        "i'm sorry, but i don't have",
+        "i'm sorry, but i cannot",
     )):
         return "REFUSAL — declines to answer"
     # Question terms absent from context: the model can only assert them by
