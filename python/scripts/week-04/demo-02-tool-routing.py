@@ -1,8 +1,13 @@
 """
 Demo 2: Tool Routing — Two tools, model picks the right one
 
-Adds a second tool and asks a question that requires the model
-to choose between them. Shows what happens when it picks wrong.
+THE POINT OF THIS DEMO: two tools, one question. The model picks — but it
+is YOUR descriptions that taught it to pick. Routing is a design problem,
+not a model problem. Vague description → vague routing.
+
+Adds a second tool and asks questions that require the model to choose
+between them. The observed calls are printed per question — outcomes vary
+run to run, so read what happened, don't assume it.
 
 Run: python scripts/week-04/demo-02-tool-routing.py
 """
@@ -70,8 +75,9 @@ for q in questions:
     print()
 
 print("=" * 70)
-print("  Q1 needed build status → model called get_build_status ✅")
-print("  Q2 needed deploy history → model called get_recent_deploys ✅")
-print("  Q3 needed both → model called both tools (service name was specified)")
-print("  Lesson: vague queries = model skips tools. Be specific.")
+print("  ROUTING IS A DESIGN PROBLEM, NOT A MODEL PROBLEM.")
+print("  Above are the OBSERVED calls for each question — they vary run to")
+print("  run. The lever you control is not the model; it is each tool's")
+print("  name and description. Vague description → vague routing.")
+print("  These exact cases are scored in shared/evals/week-04-tool-selection.yaml")
 print("=" * 70)

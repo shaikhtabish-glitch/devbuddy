@@ -1,8 +1,13 @@
 """
 Demo 1: Tool Call — Wire a tool, watch the model call it
 
-Defines get_build_status, binds it to the LLM, asks a question
-that triggers a tool call, and traces the full loop.
+THE POINT OF THIS DEMO is not that the model called a function — it is
+that the model could NOT have run it. It returned a request
+({name, args}); your code did the work. The model proposes.
+Your code disposes.
+
+Walks the loop by hand: bind a tool, ask, see the request the model
+returns, execute it yourself, inject the result, get the answer.
 
 Run: python scripts/week-04/demo-01-tool-call.py
 """
@@ -61,5 +66,8 @@ print(f"  Model: {final.content}")
 print()
 print("=" * 70)
 print("  The loop: Request → Decide → Execute → Return → Answer")
-print("  Model decided. Your code executed. Boundary held.")
+print("  THE BOUNDARY: the model could NOT have run get_build_status.")
+print("  It returned a request. Your code executed it. You decide whether")
+print("  a request becomes an action — and you keep the trace.")
+print("  The model proposes. Your code disposes.")
 print("=" * 70)

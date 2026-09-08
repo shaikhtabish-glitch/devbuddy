@@ -2,6 +2,16 @@
 
 **Goal:** Give DevBuddy real functions it can call. The model decides *when* to call them. Your code executes and enforces.
 
+**The message of the week** (the thread from Week 3): *Week 3 gave the model a memory — you boxed its input (retrieval). Week 4 gives it hands — you box its actions (tools). The model proposes. Your code disposes.* The model never runs your code: it returns a request `{name, args}`, and your application decides whether that request becomes an action. Safety never comes from the model — it comes from the boundary you draw.
+
+**What you should be able to say out loud at the end** (the senior take-home):
+
+- *Routing* (which tool / what args) — the model decides, but **my descriptions trained it**. Routing is a design problem, not a model problem.
+- *Execution* (whether it actually runs) — **my whitelist** decides, not the model.
+- *Failure* (retry / denial / fallback) — **code decisions**, deterministic, testable, auditable. The prompt is the wrong place for safety.
+- *Cost & audit* (what it did, what it cost) — **my trace** and a bounded loop. If I can't trace a decision, I don't ship it.
+- *When not to use it* — deterministic pipelines and single-call flows are just code.
+
 ---
 
 ## Setup

@@ -1,12 +1,14 @@
 """
-Demo 3: Tool Failure — Three scenarios, deterministic
+Demo 3: Tool Failure — Retry in the app layer, not the prompt
 
-Run 1: Tool succeeds normally.
-Run 2: Tool fails once, retry succeeds (resilience).
-Run 3: Tool fails all retries, returns structured error (graceful degradation).
+THE POINT OF THIS DEMO: tools fail and models misbehave. Retry, denial,
+and fallback are CODE decisions — deterministic, testable, auditable.
+The prompt is the wrong place for safety. The model only ever sees the
+final result: success or a structured error.
 
-Shows application-layer error handling keeping the system running
-when tools fail — retry logic, fallback, and structured errors.
+Three deterministic scenarios: normal, fail-once-then-succeed (retry),
+fail-everything (graceful degradation). Application-layer error handling
+keeps the system running when the tool is down.
 
 Run: python scripts/week-04/demo-03-tool-failure.py
 """
@@ -107,6 +109,9 @@ print("  Scenario 2 → transient failure. Retry succeeds. User never knows.")
 print("  Scenario 3 → persistent failure. Structured error returned.")
 print("               Model gracefully handles the degradation.")
 print()
-print("  YOUR CODE controls retry logic, fallback, and error format.")
-print("  The model only sees the final result — success or structured error.")
+print("  THE MESSAGE: retry logic, denial, and error format are CODE")
+print("  decisions — deterministic, testable, auditable. The model's")
+print("  recovery is unreliable by design; your application layer is what")
+print("  ships. Never trust the raw tool request; always route execution")
+print("  through your own guardrail.")
 print("=" * 70)

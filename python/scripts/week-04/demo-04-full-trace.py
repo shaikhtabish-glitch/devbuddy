@@ -1,8 +1,12 @@
 """
 Demo 4: Full Tool Loop with Trace — all 3 tools, step-by-step
 
-Uses run_tool_loop_with_trace() to show the complete decide→execute→return→answer
-loop with all three tools. Prints the trace so engineers can see every step.
+THE POINT OF THIS DEMO: every tool call is a decision you can replay and
+a bill you can read. If you cannot trace it, do not ship it. The trace is
+your audit log — who was asked, what ran, what it returned, what it cost.
+
+Uses run_tool_loop_with_trace() to show the complete
+decide → execute → return → answer loop across all three tools.
 
 Run: python scripts/week-04/demo-04-full-trace.py
 """
@@ -44,6 +48,9 @@ for query in queries:
 
 print("=" * 70)
 print("  Every tool call goes through: Decide → Execute → Answer.")
-print("  The trace logs each step. Use it to debug routing and")
-print("  error handling during self-learning.")
+print("  THE MESSAGE: the trace is your audit log. If you cannot trace a")
+print("  decision — replay who decided, what executed, what it returned —")
+print("  you should not ship it. And because each round is another LLM")
+print("  call, the loop is bounded: a model that never stops calling tools")
+print("  is a cost event, not a feature.")
 print("=" * 70)
