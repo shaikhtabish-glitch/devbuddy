@@ -212,4 +212,4 @@ The tool is a contract — name + args + JSON out. Where the data comes from (di
 
 ## Cross-language note
 
-Python and Node.js are now in sync for week-04: identical demo set (00 → 05), identical `src/tools` engine (raw functions + wrappers, `flaky`, bounded multi-round loops with per-step token capture, registry-guarded `executeToolSafely`). Java parity is not yet in scope for this branch.
+Python, Node.js, and Java are now in sync for week-04: identical demo set (00 → 05), identical engine semantics (`devbuddy.tools` mirrors `src/tools.py` and `src/tools.js` — raw functions + wrappers, `flaky`, bounded multi-round loops, token-aware trace, registry-guarded execution). Java's `ToolEngineTest` covers the deterministic app layer; the LLM demos run through Spring AI tool callbacks with OpenRouter.

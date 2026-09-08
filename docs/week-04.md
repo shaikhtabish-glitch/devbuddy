@@ -268,6 +268,21 @@ node scripts/week-04/demo-04-full-trace.js      # audit log + the token bill
 node scripts/week-04/demo-05-rag-bridge.js      # a tool is just data with a name
 ```
 
+**Java:**
+
+```bash
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week04.Demo00ToolTradeoffs   # tradeoffs (no LLM)
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week04.Demo01ToolCall        # the boundary
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week04.Demo02ToolRouting     # routing = descriptions
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week04.Demo03ToolFailure     # retry & denial in code
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week04.Demo04FullTrace       # audit log + the bill
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week04.Demo05RagBridge       # RAG as a tool
+```
+
+All three languages share the same message: `devbuddy.tools` (Java) mirrors
+`src/tools.py` and `src/tools.js` — raw functions + wrappers, `flaky`,
+bounded loops, token-aware trace, registry-guarded execution.
+
 ---
 
 ### Bonus: Connect tools to your Week 3 RAG index (5 min)
