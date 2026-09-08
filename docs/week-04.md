@@ -39,6 +39,14 @@ git pull upstream main
 npm install --legacy-peer-deps
 ```
 
+### Java
+
+```bash
+cd java
+# openrouter.api.key + devbuddy.model in src/main/resources/application.properties
+mvn compile
+```
+
 Verify you're ready:
 
 **Python:**
@@ -46,26 +54,44 @@ Verify you're ready:
 ```bash
 python -m pytest tests/test_schemas.py -v -k "not analyze_pr"
 python -m pytest tests/test_rag.py -v
+python -m pytest tests/test_tools.py -v -k "not tool_loop"   # deterministic app-layer tests
 ```
 
 **Node.js:**
 
 ```bash
 npx vitest run tests/test_tools.js -t "getBuildStatus|getRecentDeploys|getActiveIncidents|executeToolSafely|ALL_TOOLS"
-# 10 tests — all pure JS, no API calls needed
+# pure-JS subset (tool defs + executor) — no API calls needed
+```
+
+**Java:**
+
+```bash
+mvn test -Dtest=ToolEngineTest   # deterministic app-layer tests — no LLM
+mvn test -Dtest=RagTest          # requires Qdrant running
 ```
 
 ---
 
 ## What You Have
 
-`src/tools.py` ships fully implemented — it is the reference you will study and rebuild from scratch:
+Week 4 ships the same engine in three languages — identical contracts, so you can follow the session in whichever you prefer:
+
+| | Python | Node.js | Java |
+|---|--------|---------|------|
+| Engine | `src/tools.py` | `src/tools.js` | `devbuddy.tools.*` |
+| Tool data + raw functions | `build_status` etc. | `buildStatus` etc. | `ToolData` |
+| App layer (retry/deny/flaky) | `execute_tool_safely`, `flaky` | `executeToolSafely`, `flaky` | `ToolEngine` |
+| Bounded loop + trace | `run_tool_loop[_with_trace]` | `runToolLoop[_WithTrace]` | `ToolLoop` |
+| Demos (00–05) | `scripts/week-04/demo-0*.py` | `scripts/week-04/demo-0*.js` | `devbuddy.scripts.week04.*` |
+
+`src/tools.py` (Python) ships fully implemented — it is the reference you will study and rebuild from scratch:
 
 - **Tool definitions** — three tools (`get_build_status`, `get_recent_deploys`, `get_active_incidents`) split into **raw data functions** + **`@tool` wrappers**, so the data lives in one place
 - **The application layer** — `execute_tool_safely()` (whitelist + retry + structured errors), `flaky()` (deterministic failure injection), and `run_tool_loop()` / `run_tool_loop_with_trace()` (bounded, multi-round, token-aware)
 - **The guardrail** — the registry denies any tool the model was never given
 
-The demos import from `src.tools` — they never redefine a tool. When you rebuild it by hand below, keep the same contracts (JSON returns, `execute_tool_safely(...)`) so your version stays comparable to the reference.
+The demos import from the engine — they never redefine a tool. When you rebuild it by hand below, keep the same contracts (JSON returns, `execute_tool_safely(...)`) so your version stays comparable to the reference.
 
 ## The Architectural Boundary
 
@@ -85,9 +111,9 @@ MODEL (decision layer)              YOUR CODE (execution layer)
 **The model never runs your code.** It asks. You execute. This is the single most important principle in AI-first systems.
 
 ## Files You'll Touch
-- `src/tools.py` — your implementation (imports `src.llm`)
-- `src/llm.py` — already built (`get_llm()` factory)
-- `scripts/week-04/` — demo scripts and hands-on exercises
+- `src/tools.py` (Python) / `src/tools.js` (Node) / `devbuddy/tools` (Java) — your implementation
+- `src/llm.py` / `src/llm.js` / Spring AI `ChatModel` bean (Java) — already built
+- `scripts/week-04/` (Python/Node) and `devbuddy/scripts/week04` (Java) — demo scripts and hands-on exercises
 
 ## Mock Data (reusing from earlier weeks)
 - `shared/data/deploy-log.md` — 4 real deployments with statuses (Week 3)
@@ -101,6 +127,8 @@ MODEL (decision layer)              YOUR CODE (execution layer)
 The moderator runs two demos first (tool call + trace the loop, then tool failure). Watch them, then follow these steps.
 
 > ⚠️ **You are rebuilding what already ships.** The code below recreates, by hand, the implementation that already lives in `src/tools.py` — that is the point; internalise it. The demos and the shipped reference are your ground truth: same tool names, same JSON return contracts, same `execute_tool_safely(...)` shape.
+
+> 🌍 **Three languages, one lesson.** The steps below are written in Python, but the identical engine and demo set ship for Node (`src/tools.js`) and Java (`devbuddy.tools` + `devbuddy.scripts.week04`). Follow in your language — the tool names, contracts, and the message are the same everywhere.
 
 ---
 
