@@ -12,7 +12,7 @@
 - *Cost & audit* (what it did, what it cost) — **my trace** and a bounded loop. If I can't trace a decision, I don't ship it.
 - *When not to use it* — deterministic pipelines and single-call flows are just code.
 
-> **Deep reference:** `docs/week-04-demos-explained.md` — what each demo does, shows, and teaches (demo-00 → 05).
+> **Deep reference:** `docs/week-04-demos-explained.md` — what each demo does, shows, and teaches (demo-00 → 05). **Moderator guide:** `docs/week-04-moderator-guide.md` — the 90-minute session script.
 
 ---
 
