@@ -260,13 +260,13 @@ python scripts/week-04/demo-05-rag-bridge.py      # a tool is just data with a n
 **Node.js:**
 
 ```bash
-node scripts/week-04/demo-01-tool-call.js
-node scripts/week-04/demo-02-tool-routing.js
-node scripts/week-04/demo-03-tool-failure.js
-node scripts/week-04/demo-04-full-trace.js
+node scripts/week-04/demo-00-tradeoffs.js       # tradeoffs + when NOT to use (no LLM)
+node scripts/week-04/demo-01-tool-call.js       # the boundary: model proposes, code disposes
+node scripts/week-04/demo-02-tool-routing.js    # routing is a design problem (descriptions)
+node scripts/week-04/demo-03-tool-failure.js    # retry & denial live in the app layer
+node scripts/week-04/demo-04-full-trace.js      # audit log + the token bill
+node scripts/week-04/demo-05-rag-bridge.js      # a tool is just data with a name
 ```
-
-> Note: `demo-00` (tradeoffs) and `demo-05` (RAG bridge) are Python-only for now — Node parity is pending.
 
 ---
 
