@@ -4,7 +4,7 @@ import pytest
 from src.tools import (
     get_build_status, get_recent_deploys, get_active_incidents,
     execute_tool_safely, run_tool_loop, run_tool_loop_with_trace,
-    ALL_TOOLS, TOOLS_BY_NAME,
+    ALL_TOOLS, TOOLS_BY_NAME, build_status, flaky,
 )
 
 
@@ -90,6 +90,63 @@ def test_execute_tool_safely_unknown_tool():
     }))
     assert "error" in result
     assert "available_tools" in result
+
+
+def test_flaky_fails_first_n_then_succeeds():
+    """flaky() is a deterministic, per-instance failure injector."""
+    fn = flaky(build_status, fail_first_n=2)
+    for _ in range(2):
+        with pytest.raises(ConnectionError):
+            fn("auth-service")
+    assert json.loads(fn("auth-service"))["status"] == "healthy"
+
+
+def test_flaky_instances_are_isolated():
+    """Each flaky() wrapper owns its own counter — no shared global state."""
+    a = flaky(build_status, fail_first_n=1)
+    b = flaky(build_status, fail_first_n=1)
+    with pytest.raises(ConnectionError):
+        a("auth-service")
+    # b's counter is untouched by a's failure
+    with pytest.raises(ConnectionError):
+        b("auth-service")
+    assert json.loads(a("auth-service"))["status"] == "healthy"
+
+
+def test_execute_tool_safely_denies_unknown_via_registry(monkeypatch):
+    """The whitelist guard: an unregistered tool name is denied, not executed."""
+    def _noop(**kwargs):
+        raise AssertionError("should never be called")
+    registry = {"get_build_status": object()}  # not even a real tool
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    result = json.loads(execute_tool_safely(
+        {"name": "delete_production_db", "args": {}},
+        tools_by_name=registry,
+    ))
+    assert result["error"] == "Unknown tool: 'delete_production_db'"
+    assert result["available_tools"] == ["get_build_status"]
+
+
+def test_execute_tool_safely_exhausted_returns_structured_error(monkeypatch):
+    """Persistent failure → structured error after retries burn out."""
+    from langchain_core.tools import tool as lc_tool
+
+    impl = flaky(build_status, fail_first_n=99)
+
+    @lc_tool
+    def get_build_status(service_name: str) -> str:
+        """Return build status."""
+        return impl(service_name)
+
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    result = json.loads(execute_tool_safely(
+        {"name": "get_build_status", "args": {"service_name": "payment-api"}},
+        max_retries=1,
+        tools_by_name={"get_build_status": get_build_status},
+    ))
+    assert result["status"] == "failed"
+    assert result["attempts"] == 2  # 1 initial + 1 retry
+    assert "error" in result
 
 
 def test_all_tools_have_descriptions():

@@ -242,10 +242,12 @@ The model sees the structured error and can decide: retry, try a different tool,
 **Python:**
 
 ```bash
-python scripts/week-04/demo-01-tool-call.py
-python scripts/week-04/demo-02-tool-routing.py
-python scripts/week-04/demo-03-tool-failure.py
-python scripts/week-04/demo-04-full-trace.py
+python scripts/week-04/demo-00-tradeoffs.py       # tradeoffs + when NOT to use (no LLM)
+python scripts/week-04/demo-01-tool-call.py       # the boundary: model proposes, code disposes
+python scripts/week-04/demo-02-tool-routing.py    # routing is a design problem (descriptions)
+python scripts/week-04/demo-03-tool-failure.py    # retry & denial live in the app layer
+python scripts/week-04/demo-04-full-trace.py      # audit log + the token bill
+python scripts/week-04/demo-05-rag-bridge.py      # a tool is just data with a name
 ```
 
 **Node.js:**
@@ -306,6 +308,9 @@ and tool calls as separate steps. This bonus is just a preview of that pattern.
 - [ ] When given two tools, the model picks the right one for a question that clearly needs one
 - [ ] Tool failure is caught in the application layer and a structured error is returned to the model
 - [ ] You can explain: *"The model decides. My code executes. That boundary is everything."*
+- [ ] You can name a **con** of tool calling (latency, token cost, injection surface) and a case where you **would not** use it (deterministic pipeline)
+- [ ] The traced loop shows per-step token cost and is bounded — a runaway tool loop is a cost event
+- [ ] You can point at the registry that **denies** a tool call the model was never given
 
 ---
 
