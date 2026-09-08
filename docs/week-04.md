@@ -57,12 +57,13 @@ npx vitest run tests/test_tools.js -t "getBuildStatus|getRecentDeploys|getActive
 
 ## What You Have
 
-Open `src/tools.py`. It's a stub. By the end of this session, it will contain:
+`src/tools.py` ships fully implemented — it is the reference you will study and rebuild from scratch:
 
-- **Tool definitions** — real functions the model can call via LangChain's `@tool` decorator
-- **Tool implementations** — mock data sources (build status, deployment history) that simulate live APIs
-- **A tool-calling loop** — the `decide → execute → return` pattern
-- **Error handling** — tool failures caught in your application layer, not the prompt
+- **Tool definitions** — three tools (`get_build_status`, `get_recent_deploys`, `get_active_incidents`) split into **raw data functions** + **`@tool` wrappers**, so the data lives in one place
+- **The application layer** — `execute_tool_safely()` (whitelist + retry + structured errors), `flaky()` (deterministic failure injection), and `run_tool_loop()` / `run_tool_loop_with_trace()` (bounded, multi-round, token-aware)
+- **The guardrail** — the registry denies any tool the model was never given
+
+The demos import from `src.tools` — they never redefine a tool. When you rebuild it by hand below, keep the same contracts (JSON returns, `execute_tool_safely(...)`) so your version stays comparable to the reference.
 
 ## The Architectural Boundary
 
@@ -97,6 +98,8 @@ MODEL (decision layer)              YOUR CODE (execution layer)
 
 The moderator runs two demos first (tool call + trace the loop, then tool failure). Watch them, then follow these steps.
 
+> ⚠️ **You are rebuilding what already ships.** The code below recreates, by hand, the implementation that already lives in `src/tools.py` — that is the point; internalise it. The demos and the shipped reference are your ground truth: same tool names, same JSON return contracts, same `execute_tool_safely(...)` shape.
+
 ---
 
 ### Step 1: Wire your first tool (10 min)
@@ -104,21 +107,23 @@ The moderator runs two demos first (tool call + trace the loop, then tool failur
 Define `get_build_status(service_name)` as a LangChain tool and call it:
 
 ```python
+import json
 from langchain_core.tools import tool
 from src.llm import get_llm
 from langchain_core.messages import HumanMessage
 
-# 1. Define the tool
+# 1. Define the tool — return JSON with status + last_deploy (the contract)
 @tool
 def get_build_status(service_name: str) -> str:
     """Return the current build status for a given service."""
     # Mock data — in production this hits a real API
     statuses = {
-        "auth-service": "healthy",
-        "payment-api": "degraded",
-        "inventory-service": "unknown",
+        "auth-service": {"status": "healthy", "last_deploy": "2026-06-28T08:15:00Z"},
+        "payment-api": {"status": "degraded", "last_deploy": "2026-06-28T06:45:00Z"},
+        "inventory-service": {"status": "unknown", "last_deploy": "2026-06-20T11:00:00Z"},
     }
-    return statuses.get(service_name, f"unknown — no data for '{service_name}'")
+    data = statuses.get(service_name, {"status": "unknown", "error": f"No data for '{service_name}'"})
+    return json.dumps(data)
 
 # 2. Bind it to the LLM
 llm = get_llm(temperature=0)
@@ -205,33 +210,33 @@ Some engineers will see the model call both tools. Some will see it call just on
 
 ### Step 4: Break a tool — handle failure (10 min)
 
-Make a tool throw an exception. Handle it in your application layer:
+Make a tool fail. Handle it in the application layer — deterministically, with `flaky()` from the shipped code:
 
 ```python
+import json
+from langchain_core.tools import tool
+from src.tools import build_status, flaky, execute_tool_safely
+
+# Deterministic failure: the first N calls raise, then succeed.
+# flaky() wraps the RAW function — the data stays in src.tools.
+impl = flaky(build_status, fail_first_n=1)   # fail once, then recover
+
 @tool
 def get_build_status(service_name: str) -> str:
     """Return the current build status for a given service."""
-    import random
-    if random.random() < 0.3:  # 30% failure rate
-        raise ConnectionError(f"Could not reach monitoring API for '{service_name}'")
-    statuses = {"auth-service": "healthy", "payment-api": "degraded"}
-    return statuses.get(service_name, "unknown")
+    return impl(service_name)
 
-
-def execute_tool_safely(tool_call, tools_map):
-    """Execute a tool call with error handling in the application layer."""
-    tool_name = tool_call["name"]
-    try:
-        tool_fn = tools_map[tool_name]
-        return tool_fn.invoke(tool_call["args"])
-    except Exception as e:
-        return json.dumps({
-            "error": str(e),
-            "tool": tool_name,
-            "status": "failed",
-            "hint": "The tool is temporarily unavailable. Try again or use cached data."
-        })
+# Run it through the app-layer executor with retries, and watch them happen.
+result = execute_tool_safely(
+    {"name": "get_build_status", "args": {"service_name": "payment-api"}},
+    max_retries=2,
+    tools_by_name={"get_build_status": get_build_status},
+    verbose=True,
+)
+print(result)
 ```
+
+Increase `fail_first_n` past the retry budget and the executor returns a **structured error** (status, error, attempts) instead of crashing. A registry that maps tool names is also your **guardrail**: a call to a tool the model was never given (e.g. `delete_production_db`) is denied with `available_tools`, never executed.
 
 The model sees the structured error and can decide: retry, try a different tool, or tell the user. But **your code controls** whether to actually retry — not the model.
 
@@ -258,6 +263,8 @@ node scripts/week-04/demo-02-tool-routing.js
 node scripts/week-04/demo-03-tool-failure.js
 node scripts/week-04/demo-04-full-trace.js
 ```
+
+> Note: `demo-00` (tradeoffs) and `demo-05` (RAG bridge) are Python-only for now — Node parity is pending.
 
 ---
 
