@@ -108,11 +108,22 @@ def test_tools_by_name_maps_all():
 # ═══════════════════════════════════════════════════════════════
 
 def test_run_tool_loop_calls_tool():
-    """A question that needs build status triggers a tool call."""
-    result = run_tool_loop("Is the auth-service healthy?", temperature=0.0)
-    assert len(result) > 10, "Answer is too short"
-    assert any(w in result.lower() for w in ["healthy", "auth"]), (
-        f"Answer should reference auth-service health: {result[:100]}"
+    """A question that needs build status triggers a tool call, and the answer
+    is grounded in the tool result (in the model's own words, not verbatim)."""
+    trace = run_tool_loop_with_trace("Is the auth-service healthy?", temperature=0.0)
+    calls = [tc["name"] for tc in trace.get("tool_calls", [])]
+    assert "get_build_status" in calls, f"Expected get_build_status call, got: {calls}"
+    assert trace["tool_calls"][0]["args"].get("service_name") == "auth-service", (
+        f"Tool should target auth-service: {trace['tool_calls'][0]['args']}"
+    )
+    answer = trace["answer"]
+    assert len(answer) > 10, "Answer is too short"
+    # The answer must reflect the tool result: a status word, the service name,
+    # or the deploy marker that the tool returned. Brittle word-for-word
+    # matching ("healthy") fails on correct-but-paraphrased answers.
+    low = answer.lower()
+    assert any(w in low for w in ["auth", "healthy", "degraded", "down", "unknown", "08:15"]), (
+        f"Answer should reflect the build-status result: {answer[:120]}"
     )
 
 

@@ -113,6 +113,23 @@ def get_active_incidents(service_name: str) -> str:
 ALL_TOOLS = [get_build_status, get_recent_deploys, get_active_incidents]
 TOOLS_BY_NAME = {t.name: t for t in ALL_TOOLS}
 
+# Upper bound on tool-calling rounds. The model may chain tools (status →
+# deploys → incidents); if it never settles on a text answer we force one.
+MAX_TOOL_TURNS = 6
+
+
+def _as_text(message) -> str:
+    """Extract plain text from an AI message (handles str or content blocks)."""
+    content = message.content
+    if isinstance(content, str):
+        return content.strip()
+    try:
+        return "".join(
+            block.get("text", "") for block in content if isinstance(block, dict)
+        ).strip()
+    except Exception:
+        return str(content).strip()
+
 
 def execute_tool_safely(tool_call: dict, max_retries: int = 2) -> str:
     """
@@ -162,10 +179,11 @@ def run_tool_loop(user_query: str, temperature: float = 0.0) -> str:
     """
     Full tool-calling loop: Request → Decide → Execute → Return → Answer.
 
-    1. Send the user query to the LLM with tools bound.
-    2. If the model returns a tool call, execute it (with error handling).
-    3. Inject the result back into the conversation.
-    4. Ask the model to produce a final answer.
+    The loop is bounded but multi-round: the model may chain as many tool
+    calls as it needs (e.g. status, then deploys, then incidents). Each tool
+    result is injected back into the conversation until the model produces a
+    plain-text answer. If it never settles, an unbounded final call forces
+    text so the caller always gets an answer, never an empty string.
 
     Args:
         user_query: The user's question.
@@ -186,25 +204,20 @@ def run_tool_loop(user_query: str, temperature: float = 0.0) -> str:
         HumanMessage(content=user_query),
     ]
 
-    # Step 1 + 2: Request → Decide
-    response = llm_with_tools.invoke(messages)
-    messages.append(response)
+    # Request → Decide → Execute → Return, repeated until the model answers.
+    for _ in range(MAX_TOOL_TURNS):
+        response = llm_with_tools.invoke(messages)
+        messages.append(response)
 
-    # Step 3 + 4: Execute (if tools were called) → Return
-    if response.tool_calls:
+        if not response.tool_calls:
+            return _as_text(response)
+
         for tc in response.tool_calls:
             result = execute_tool_safely(tc)
-            messages.append(ToolMessage(
-                content=result,
-                tool_call_id=tc["id"],
-            ))
+            messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
 
-        # Step 5: Answer (with tool results in context)
-        final = llm_with_tools.invoke(messages)
-        return final.content.strip()
-
-    # No tool calls — model answered directly
-    return response.content.strip()
+    # The model kept calling tools — drop the tools and force a text answer.
+    return _as_text(llm.invoke(messages))
 
 
 def run_tool_loop_with_trace(user_query: str, temperature: float = 0.0) -> dict:
@@ -218,7 +231,7 @@ def run_tool_loop_with_trace(user_query: str, temperature: float = 0.0) -> dict:
     llm = get_llm(temperature=temperature)
     llm_with_tools = llm.bind_tools(ALL_TOOLS)
 
-    trace = {"query": user_query, "steps": []}
+    trace = {"query": user_query, "steps": [], "tool_calls": [], "tool_results": []}
     messages = [
         SystemMessage(content=(
             "You are a helpful engineering assistant. You have access to tools "
@@ -228,34 +241,24 @@ def run_tool_loop_with_trace(user_query: str, temperature: float = 0.0) -> dict:
         HumanMessage(content=user_query),
     ]
 
-    response = llm_with_tools.invoke(messages)
-    messages.append(response)
-    trace["steps"].append({"type": "decide", "content": str(response.content)[:200]})
+    for _ in range(MAX_TOOL_TURNS):
+        response = llm_with_tools.invoke(messages)
+        messages.append(response)
+        trace["steps"].append({"type": "decide", "content": str(response.content)[:200]})
 
-    if response.tool_calls:
-        trace["tool_calls"] = [
-            {"name": tc["name"], "args": tc["args"]}
-            for tc in response.tool_calls
-        ]
-        trace["tool_results"] = []
+        if not response.tool_calls:
+            trace["answer"] = _as_text(response)
+            trace["steps"].append({"type": "answer", "content": trace["answer"]})
+            return trace
 
         for tc in response.tool_calls:
+            trace["tool_calls"].append({"name": tc["name"], "args": tc["args"]})
             result = execute_tool_safely(tc)
-            trace["tool_results"].append({
-                "tool": tc["name"],
-                "result": result[:200],
-            })
-            messages.append(ToolMessage(
-                content=result,
-                tool_call_id=tc["id"],
-            ))
+            trace["tool_results"].append({"tool": tc["name"], "result": result[:200]})
+            messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
             trace["steps"].append({"type": "execute", "tool": tc["name"], "result": result[:200]})
 
-        final = llm_with_tools.invoke(messages)
-        trace["answer"] = final.content.strip()
-        trace["steps"].append({"type": "answer", "content": final.content.strip()})
-    else:
-        trace["answer"] = response.content.strip()
-        trace["steps"].append({"type": "answer", "content": response.content.strip()})
-
+    # The model kept calling tools — drop the tools and force a text answer.
+    trace["answer"] = _as_text(llm.invoke(messages))
+    trace["steps"].append({"type": "answer", "content": trace["answer"]})
     return trace
