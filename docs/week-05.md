@@ -135,67 +135,20 @@ tools that query that index. No mock data. No repeated indexing.
 
 ### Step 2: Connect a client and call a tool (10 min)
 
-Open a second terminal. Use the MCP client to connect and call:
-
-```python
-# scripts/week-05/demo-01-mcp-client.py
-import asyncio
-from mcp.client.stdio import stdio_client
-from mcp import ClientSession
-
-async def main():
-    async with stdio_client("python src/mcp_server.py") as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-
-            # Discover available tools
-            tools = await session.list_tools()
-            print(f"Available tools: {[t.name for t in tools]}")
-
-            # Call get_build_status
-            result = await session.call_tool("get_build_status", {"service_name": "payment-api"})
-            print(f"Result: {result}")
-
-asyncio.run(main())
-```
+Open a second terminal. Use the MCP client to connect, discover, and call:
 
 ```bash
-python scripts/week-05/demo-01-mcp-client.py
-
-  📡  DISCOVER: list_tools()
-      🏗️  get_build_status
-          Return the current build/health status for a given service.
-      🚀  get_recent_deploys
-          Return the last N deployments for a given service.
-      🚨  get_active_incidents
-          Return any active (unresolved) incidents for a given service.
-
-  ───────────────────────────────────────────────────────────
-  🏗️  QUERY: get_build_status
-  ───────────────────────────────────────────────────────────
-      →  RESPONSE  auth-service:  HEALTHY
-                     last deploy  2026-06-28T08:15:00Z
-      →  RESPONSE  payment-api:   DEGRADED
-                     last deploy  2026-06-28T06:45:00Z
-
-  ───────────────────────────────────────────────────────────
-  🚀  QUERY: get_recent_deploys(payment-api, limit=2)
-  ───────────────────────────────────────────────────────────
-      →  ✅  abc123def456  tabish   2026-06-28T08:15:00Z
-      →  ✅  def789ghi012  maria    2026-06-28T06:45:00Z
-
-  ───────────────────────────────────────────────────────────
-  🚨  QUERY: get_active_incidents(payment-api)
-  ───────────────────────────────────────────────────────────
-      →  Sev1    INC-842
-                  payment-api latency spike. 15% affected.
-
-  All data from the Week 3 RAG index (Qdrant).
-  Same tools as Week 4. Any MCP client can call them.
+python scripts/week-05/demo-01-wire-server.py
 ```
+
+This script walks through discovery (`list_tools()`), then calls all three tools
+(`get_build_status`, `get_recent_deploys`, `get_active_incidents`) against real
+data from the RAG index.
 
 **The story:** DISCOVER → QUERY → RESPONSE. The MCP protocol in action.
 All data from the RAG index (Week 3), served over a shared protocol (Week 5).
+In Week 4 tools were hardcoded imports. Here, the client asks "what tools exist?"
+and gets an answer dynamically. No import. No shared code. A protocol.
 
 ---
 
@@ -204,20 +157,14 @@ All data from the RAG index (Week 3), served over a shared protocol (Week 5).
 Misconfigure intentionally to learn the error patterns:
 
 ```bash
-# Wrong transport — try connecting to HTTP instead of stdio
-python -c "
-from mcp.client.sse import sse_client
-# This will fail — server is on stdio, not SSE
-"
-
-# Wrong tool name
-python -c "
-# Call 'get_buildstatus' instead of 'get_build_status'
-# → Tool not found error
-"
+python scripts/week-05/demo-03-break-it.py
 ```
 
-**These are the most common production issues.** You're debugging MCP connections. Learn the error messages — you'll see them again.
+This script walks through 4 acts: wrong port, wrong tool name, server down,
+and recovery. Each act shows the exact error message you'd see in production.
+
+**These are the most common production issues.** You're debugging MCP connections.
+Learn the error messages — you'll see them again.
 
 ---
 
@@ -240,36 +187,62 @@ Restart the server. Reconnect the client. Does `list_tools()` show your new tool
 
 ---
 
-### Step 5: stdio vs production (5 min)
+### Step 5: Cross-Language MCP — same protocol, any language (10 min)
 
-Our server uses **stdio** transport — the client spawns `python src/mcp_server.py`
-as a subprocess. This is perfect for local dev, but it has two limitations:
+MCP is language-agnostic. The Python server exposes tools. A Node.js client
+can call them. A Java client can call them. The protocol IS the contract —
+not the language.
 
-1. **New process per connection** — no shared state, no connection pooling
-2. **Same machine only** — stdio can't cross the network
+```bash
+# Terminal 1: Python MCP server
+python src/mcp_server.py
+# → http://localhost:8000/sse
 
-In production you'd switch to **HTTP/SSE** transport — the server runs as
-a long-lived daemon on a port, clients connect over the network:
+# Terminal 2: Node.js MCP server
+cd ../nodejs && node src/mcp_server.js
+# → http://localhost:3001/sse
 
-```python
-# Production pattern (not used in this session):
-if __name__ == "__main__":
-    mcp.run(transport="sse", host="0.0.0.0", port=8000)
+# Terminal 3: Cross-language demo
+python scripts/week-05/demo-02-cross-language.py
 ```
 
-Same tools. Same protocol. Different transport. That's the MCP promise.
+This connects a Python client to BOTH servers and compares the tool schemas.
+Identical names. Identical JSON. Different languages, same protocol.
+
+**Senior take-home:** the language of your server is an internal implementation
+detail. The protocol — tool names, schemas, JSON responses — is your public
+API. Version that, not the code.
 
 ---
 
-### Step 6: Explore (remaining time)
+### Step 6: MCP + LLM — the agent doesn't know tools are remote (10 min)
+
+The Decide → Execute → Return loop from Week 4 is IDENTICAL when tools come
+from MCP. The LLM doesn't know — and doesn't care — whether a tool is a local
+function or a remote MCP endpoint.
 
 ```bash
-# Study the server implementation
-cat src/mcp_server.py
-
-# Run the full pipeline: MCP tools → LLM
-cat scripts/week-05/demo-02-mcp-with-llm.py
+python scripts/week-05/demo-05-mcp-with-llm.py
 ```
+
+**Key insight:** You can swap the MCP server URL to a different team's server
+and the LLM never notices. That's the ecosystem payoff.
+
+### Step 7: Security & scope — what does your MCP server expose? (10 min)
+
+Your MCP server is now reachable over the network. Anyone who can connect can
+discover your tools. Before you ship it, audit the blast radius.
+
+```bash
+python scripts/week-05/demo-04-security-scope.py
+```
+
+This script inspects each tool's schema, assesses read-only vs write posture,
+and walks through a hardening checklist: auth, rate limiting, audit logging.
+
+**Senior take-home:** Same principle as Week 4, one layer out. The model
+proposes a tool call. Your app layer validates it. The model proposes a
+connection. Your server auth validates it.
 
 ---
 
