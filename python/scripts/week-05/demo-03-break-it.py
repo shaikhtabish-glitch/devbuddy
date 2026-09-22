@@ -12,6 +12,9 @@ now so you recognise them on-call.
   Act 4 — Recovery: fix the issue, call succeeds
 
 Prerequisites:
+  Qdrant vector DB running:
+    docker-compose up -d   (from repo root)
+
   MCP server running on port 8000:
     python src/mcp_server.py
 

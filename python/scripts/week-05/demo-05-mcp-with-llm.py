@@ -11,6 +11,9 @@ agnostic. You can swap the MCP server URL to a different team's server
 and the LLM never notices. Ecosystem achieved.
 
 Prerequisites:
+  Qdrant vector DB running:
+    docker-compose up -d   (from repo root)
+
   MCP server running on port 8000:
     python src/mcp_server.py
 

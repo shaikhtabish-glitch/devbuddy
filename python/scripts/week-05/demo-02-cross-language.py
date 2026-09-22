@@ -10,11 +10,14 @@ We connect a Python client to TWO MCP servers (Python and Node.js) and
 show that the tools are identical. Same names. Same schemas. Same JSON.
 
 Prerequisites:
-  Python MCP server running in one terminal:
+  Qdrant vector DB running:
+    docker-compose up -d   (from repo root)
+
+  Python MCP server in one terminal:
     python src/mcp_server.py
     → Port 8000
 
-  Node.js MCP server running in another terminal:
+  Node.js MCP server in another terminal:
     cd ../nodejs && node src/mcp_server.js
     → Port 3001
 

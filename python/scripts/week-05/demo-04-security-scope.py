@@ -10,6 +10,9 @@ walks through the security posture of each one — what it exposes, what
 it could be abused for, and what guards you'd add before production.
 
 Prerequisites:
+  Qdrant vector DB running:
+    docker-compose up -d   (from repo root)
+
   MCP server running on port 8000:
     python src/mcp_server.py
 

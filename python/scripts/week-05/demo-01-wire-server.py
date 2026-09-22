@@ -10,6 +10,10 @@ The server exposes tools as a protocol, not a function call.
 The client doesn't import anything — it discovers.
 
 Prerequisites:
+  Qdrant vector DB running:
+    docker-compose up -d   (from repo root)
+    curl http://localhost:6333/healthz
+
   MCP server running in another terminal:
     python src/mcp_server.py
     → Server running on http://localhost:8000/sse
