@@ -27,7 +27,7 @@ npm run verify
 | LLM Provider | OpenRouter (via `@langchain/openai`) |
 | Framework | LangChain.js + LangGraph.js |
 | Validation | Zod |
-| Vector Store | ChromaDB |
+| Vector Store | Qdrant |
 | Embeddings | @xenova/transformers |
 | MCP | @modelcontextprotocol/sdk |
 | Evals | Promptfoo |
@@ -43,11 +43,12 @@ nodejs/
 │   ├── schemas.js        # Week 2: Zod schemas + structured output
 │   ├── rag.js            # Week 3: loader, chunker, vector store, retriever
 │   ├── tools.js          # Week 4: tool definitions
-│   ├── mcp_server.js     # Week 5: MCP server
+│   ├── mcp_server.js     # Week 5: MCP server (tools + resources + prompts)
 │   ├── agent.js          # Week 6: agent graph, planner, orchestrator
 │   ├── guardrails.js     # Week 7: input/output guardrails
 │   ├── cost_tracker.js   # Week 7: token/cost tracking
 │   └── tracing.js        # Week 7: callbacks and tracing
+├── scripts/              # Per-week demo scripts (run: node scripts/week-NN/...)
 ├── package.json
 └── .env.example
 ```

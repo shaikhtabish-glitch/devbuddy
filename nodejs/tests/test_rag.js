@@ -5,9 +5,15 @@ import { describe, it, expect, beforeAll } from "vitest";
 import {
   indexDocuments,
   retrieve,
+  retrieveWithSources,
   hybridSearch,
+  hybridSearchWithScores,
   groundedAnswer,
   groundedAnswerWithChunks,
+  _bm25Tokenize,
+  _isTitleOnly,
+  SYSTEM_PROMPT,
+  RRF_K,
 } from "../src/rag.js";
 
 // Build index once before all tests
@@ -110,5 +116,50 @@ describe("error handling", () => {
     // but the error message is clear in the code.
     // This test just validates the function exists and is importable.
     expect(typeof retrieve).toBe("function");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Week 4 additions — provenance, hybrid ranks, tokenizer
+// ═══════════════════════════════════════════════════════════════
+
+describe("retrieveWithSources", () => {
+  it("returns content, source, and score", async () => {
+    const results = await retrieveWithSources("payment API", 3);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].content).toBeTruthy();
+    expect(results[0].source).toBeTruthy();
+    expect(typeof results[0].score).toBe("number");
+  });
+});
+
+describe("hybridSearchWithScores", () => {
+  it("reports per-retriever ranks and the fused score", async () => {
+    const results = await hybridSearchWithScores("payment-api", 3);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]).toHaveProperty("rrf_score");
+    expect(results[0]).toHaveProperty("vec_rank");
+    expect(results[0]).toHaveProperty("bm25_rank");
+    expect(results[0].rrf_score).toBeGreaterThan(0);
+  });
+});
+
+describe("BM25 tokenizer & title-only filter", () => {
+  it("splits hyphenated IDs into tokens", () => {
+    expect(_bm25Tokenize("INC-799")).toEqual(["inc", "799"]);
+  });
+
+  it("detects heading-only chunks", () => {
+    expect(_isTitleOnly("# Payment API\n> owner: x")).toBe(true);
+    expect(
+      _isTitleOnly(
+        "# Payment API\nThis service handles payments and refunds with retries."
+      )
+    ).toBe(false);
+  });
+
+  it("exposes the RRF constant and a context prompt slot", () => {
+    expect(RRF_K).toBe(60);
+    expect(SYSTEM_PROMPT).toContain("{context}");
   });
 });

@@ -155,6 +155,7 @@ nodejs/
 │   ├── cost_tracker.js   # Cost tracking (Week 7)
 │   └── tracing.js        # Tracing + observability (Week 7)
 ├── node_modules/         # Dependencies (git-ignored)
+├── scripts/              # Per-week demo scripts (node scripts/week-NN/...)
 ├── package.json          # Project config + scripts + dependencies
 ├── package-lock.json     # Locked dependency versions
 └── .env                  # Your API key (git-ignored)

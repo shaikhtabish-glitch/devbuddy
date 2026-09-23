@@ -20,12 +20,15 @@ docker-compose up -d
 
 ### Node.js
 
-*(Note: The NodeJS server mirrors these architectural principles, but for this session, we will focus on the Python server as our primary Context provider).*
+The Node.js server mirrors these architectural principles — same three primitives (Tools, Resources, Prompts), same SSE transport, on port **3001**.
 
 ```bash
 cd nodejs
 git pull upstream main
 npm install --legacy-peer-deps
+
+# Qdrant must be running (Week 3+)
+docker compose up -d
 ```
 
 ---
@@ -66,11 +69,18 @@ The moderator runs a demo first (stand up server + connect client). Watch, then 
 ### Step 0: Start the Server
 
 ```bash
-# Terminal 1
+# Terminal 1 — Python
 cd python
 source .venv/bin/activate
 python src/mcp_server.py
 # → Server running on http://localhost:8000/sse
+```
+
+```bash
+# Terminal 1 (alternative) — Node.js
+cd nodejs
+node src/mcp_server.js
+# → Server running on http://localhost:3001/sse
 ```
 
 ### Step 1: Discovering Context (Resources & Prompts)
@@ -80,12 +90,22 @@ In a second terminal, explore how a client discovers context without hardcoded i
 ```bash
 python scripts/week-05/demo-01-wire-server.py
 ```
+
+```bash
+# Node.js (server must be running)
+node scripts/week-05/demo-01-wire-server.js
+```
 **The lesson:** Notice that the client didn't call a "tool" to read the SLA document. It navigated it as a `Resource`. It didn't hardcode a system prompt; it fetched the `Prompt` template directly from the server.
 
 ### Step 2: Advanced Client Patterns (Scaling, Roots, Elicitation)
 
 ```bash
 python scripts/week-05/demo-02-client-scaling.py
+```
+
+```bash
+# Node.js
+node scripts/week-05/demo-02-client-scaling.js
 ```
 **The lesson:** A production-grade MCP client does more than just call tools. This script demonstrates three critical enterprise capabilities:
 1. **Roots:** The client tells the server which local directories it is allowed to operate in, establishing safe workspace boundaries.
@@ -97,12 +117,22 @@ python scripts/week-05/demo-02-client-scaling.py
 ```bash
 python scripts/week-05/demo-03-break-it.py
 ```
+
+```bash
+# Node.js
+node scripts/week-05/demo-03-break-it.js
+```
 **The lesson:** What happens when a client tries to read a file you haven't exposed as a Resource (like `/etc/passwd`)? The protocol strictly rejects it. You will learn to recognize and handle network-level rejections gracefully in your application layer.
 
 ### Step 4: Security & The Context Blast Radius
 
 ```bash
 python scripts/week-05/demo-04-security-scope.py
+```
+
+```bash
+# Node.js
+node scripts/week-05/demo-04-security-scope.js
 ```
 **The lesson:** Exposing an entire filesystem as a Resource has a massive blast radius. If someone drops an API key in a folder exposed as a Resource, any connected commercial client can read it. You will learn the difference between the broad scope of Resources vs. the tight execution scope of Tools.
 
@@ -111,12 +141,17 @@ python scripts/week-05/demo-04-security-scope.py
 ```bash
 python scripts/week-05/demo-05-mcp-with-llm.py
 ```
+
+```bash
+# Node.js
+node scripts/week-05/demo-05-mcp-with-llm.js
+```
 **The lesson:** The grand finale. The LLM acts as the orchestrator. It fetches the system prompt from the server, reads a markdown specification from the server, and executes data-fetching tools on the server. True separation of Context from the Application layer is achieved.
 
 ---
 
 ## Acceptance Criteria
-- [ ] `python src/mcp_server.py` starts without errors and connects to Qdrant.
+- [ ] `python src/mcp_server.py` (or `node src/mcp_server.js`) starts without errors and connects to Qdrant.
 - [ ] You can explain why exposing an SLA document as a `Resource` is architecturally superior to writing a custom `read_sla_doc()` Tool.
 - [ ] You understand the security implications of exposing broad file-based Resources versus scoped Tools.
 - [ ] The LLM in Demo 5 successfully synthesizes an answer using the server's Prompt, Resource, and Tool.
