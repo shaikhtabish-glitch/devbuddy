@@ -1,0 +1,23 @@
+<configuration>
+    <!-- Clean console output — no timestamps, no levels, no thread names.
+         The verification script is a CLI report, not a long-running service. -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="devbuddy" level="DEBUG"/>
+
+    <!-- Silence Spring framework and HTTP client noise -->
+    <logger name="org.springframework" level="WARN"/>
+    <logger name="org.springframework.ai" level="OFF"/>
+    <logger name="org.springframework.retry" level="OFF"/>
+    <logger name="org.springframework.web.client" level="OFF"/>
+    <logger name="reactor.netty" level="OFF"/>
+    <logger name="io.netty" level="OFF"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

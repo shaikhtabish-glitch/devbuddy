@@ -31,6 +31,19 @@ npm install --legacy-peer-deps
 docker compose up -d
 ```
 
+### Java
+
+The Java server mirrors the same three primitives (Tools, Resources, Prompts) over SSE on port **8002**.
+
+```bash
+cd java
+git pull upstream main
+mvn -q -DskipTests package   # first build downloads dependencies
+
+# Qdrant must be running (Week 3+)
+docker compose up -d
+```
+
 ---
 
 ## What You Have
@@ -83,6 +96,13 @@ node src/mcp_server.js
 # → Server running on http://localhost:3001/sse
 ```
 
+```bash
+# Terminal 1 (alternative) — Java
+cd java
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.mcp.DevBuddyMcpServer
+# → Server running on http://localhost:8002/sse
+```
+
 ### Step 1: Discovering Context (Resources & Prompts)
 
 In a second terminal, explore how a client discovers context without hardcoded integrations.
@@ -95,6 +115,11 @@ python scripts/week-05/demo-01-wire-server.py
 # Node.js (server must be running)
 node scripts/week-05/demo-01-wire-server.js
 ```
+
+```bash
+# Java (server must be running)
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week05.Demo01WireServer
+```
 **The lesson:** Notice that the client didn't call a "tool" to read the SLA document. It navigated it as a `Resource`. It didn't hardcode a system prompt; it fetched the `Prompt` template directly from the server.
 
 ### Step 2: Advanced Client Patterns (Scaling, Roots, Elicitation)
@@ -106,6 +131,11 @@ python scripts/week-05/demo-02-client-scaling.py
 ```bash
 # Node.js
 node scripts/week-05/demo-02-client-scaling.js
+```
+
+```bash
+# Java
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week05.Demo02ClientScaling
 ```
 **The lesson:** A production-grade MCP client does more than just call tools. This script demonstrates three critical enterprise capabilities:
 1. **Roots:** The client tells the server which local directories it is allowed to operate in, establishing safe workspace boundaries.
@@ -122,6 +152,11 @@ python scripts/week-05/demo-03-break-it.py
 # Node.js
 node scripts/week-05/demo-03-break-it.js
 ```
+
+```bash
+# Java
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week05.Demo03BreakIt
+```
 **The lesson:** What happens when a client tries to read a file you haven't exposed as a Resource (like `/etc/passwd`)? The protocol strictly rejects it. You will learn to recognize and handle network-level rejections gracefully in your application layer.
 
 ### Step 4: Security & The Context Blast Radius
@@ -133,6 +168,11 @@ python scripts/week-05/demo-04-security-scope.py
 ```bash
 # Node.js
 node scripts/week-05/demo-04-security-scope.js
+```
+
+```bash
+# Java
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week05.Demo04SecurityScope
 ```
 **The lesson:** Exposing an entire filesystem as a Resource has a massive blast radius. If someone drops an API key in a folder exposed as a Resource, any connected commercial client can read it. You will learn the difference between the broad scope of Resources vs. the tight execution scope of Tools.
 
@@ -146,12 +186,17 @@ python scripts/week-05/demo-05-mcp-with-llm.py
 # Node.js
 node scripts/week-05/demo-05-mcp-with-llm.js
 ```
+
+```bash
+# Java
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week05.Demo05McpWithLlm
+```
 **The lesson:** The grand finale. The LLM acts as the orchestrator. It fetches the system prompt from the server, reads a markdown specification from the server, and executes data-fetching tools on the server. True separation of Context from the Application layer is achieved.
 
 ---
 
 ## Acceptance Criteria
-- [ ] `python src/mcp_server.py` (or `node src/mcp_server.js`) starts without errors and connects to Qdrant.
+- [ ] `python src/mcp_server.py` (or `node src/mcp_server.js`, or `mvn -q compile exec:java -Dexec.mainClass=devbuddy.mcp.DevBuddyMcpServer`) starts without errors and connects to Qdrant.
 - [ ] You can explain why exposing an SLA document as a `Resource` is architecturally superior to writing a custom `read_sla_doc()` Tool.
 - [ ] You understand the security implications of exposing broad file-based Resources versus scoped Tools.
 - [ ] The LLM in Demo 5 successfully synthesizes an answer using the server's Prompt, Resource, and Tool.
