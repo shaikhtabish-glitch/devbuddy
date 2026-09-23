@@ -17,3 +17,13 @@ nodejs/.env
 
 # IDE
 .idea/
+
+# Graphify knowledge graph cache
+graphify-out/
+
+# Session planning docs
+week-*-session/
+
+# Generated artifacts
+*.log
+*.txt
