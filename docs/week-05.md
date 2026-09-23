@@ -82,12 +82,15 @@ python scripts/week-05/demo-01-wire-server.py
 ```
 **The lesson:** Notice that the client didn't call a "tool" to read the SLA document. It navigated it as a `Resource`. It didn't hardcode a system prompt; it fetched the `Prompt` template directly from the server.
 
-### Step 2: The Universal Client
+### Step 2: Advanced Client Patterns (Scaling, Roots, Elicitation)
 
 ```bash
-python scripts/week-05/demo-02-cross-language.py
+python scripts/week-05/demo-02-client-scaling.py
 ```
-**The lesson:** This script simulates a "dumb" commercial client. It knows nothing about DevBuddy. By simply querying the server, it learns what workflows exist, reads the necessary files, and identifies the tools to execute. This proves that you can plug your MCP server into standard enterprise AI tools *today* with zero custom integration.
+**The lesson:** A production-grade MCP client does more than just call tools. This script demonstrates three critical enterprise capabilities:
+1. **Roots:** The client tells the server which local directories it is allowed to operate in, establishing safe workspace boundaries.
+2. **Progressive Tool Discovery:** Instead of loading 10,000 JSON schemas and blowing up the LLM's context window, the client gives the LLM a single `search_tools` meta-tool. When the LLM searches, the client dynamically injects the necessary schemas into the context at runtime.
+3. **Elicitation:** When the LLM attempts a dangerous action, the server can return an `InputRequiredResult`. The client pauses the workflow, asks the human for a 2FA token, and resumes execution securely.
 
 ### Step 3: Protocol Errors & Resilience
 

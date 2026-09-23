@@ -21,7 +21,7 @@
 |---|------|------------------------------|
 | 0 | Tradeoffs | MCP has real overhead — if you don't have multiple consumers, just import the function |
 | 1 | Wire server | Week 4 = hardcoded imports. Week 5 = dynamic discovery. The client asked "what tools exist?" |
-| 2 | Cross-language | The protocol is the contract — not the language. Python server, Node.js client, same tools |
+| 2 | Advanced Client | Roots scope the workspace. Elicitation pauses for human input. Progressive discovery scales to 10k tools. |
 | 3 | Break it | MCP connections fail in predictable, learnable ways. Wrong port, wrong tool, server down |
 | 4 | Security & scope | Every tool is an attack surface. Start read-only. Add auth before write |
 | 5 | MCP + LLM | The agent doesn't know tools are remote. Same Decide→Execute→Return loop from Week 4 |
@@ -51,12 +51,11 @@ control, whose job it is:
       uses the LLM for data synthesis.
 - [ ] **MCP server tested:** `python src/mcp_server.py` starts without errors
       on port 8000. Verify: `curl http://localhost:8000/sse` returns a response.
-- [ ] **Node.js MCP server tested (optional for cross-language demo):**
+- [ ] **Node.js MCP server tested (optional for cross-room testing):**
       `cd nodejs && node src/mcp_server.js` starts on port 3001.
 - [ ] **All six demos rehearsed** from a clean state:
       `python scripts/week-05/demo-00-tradeoffs.py` … `demo-05-mcp-with-llm.py`.
-- [ ] **Know your numbers:** demo-02 cross-language requires both servers
-      running; demo-03 break-it assumes server on port 8000; demo-05 token
+- [ ] **Know your numbers:** demo-02 client-scaling requires understanding LLM token costs when it dynamically binds tools; demo-03 break-it assumes server on port 8000; demo-05 token
       costs are ~3–5 LLM calls per query.
 - [ ] **Model nuance check:** the repo routes to `gpt-4o-mini` via OpenRouter.
       Extraction reliability varies — demo-01/05 may return slightly different
@@ -86,17 +85,13 @@ control, whose job it is:
    *asked* what tools exist and got an answer dynamically. No `from src.tools import`.
    A protocol replaced a hardcoded dependency."*
 4. Point out: "The server is Python. The client is Python. But the protocol
-   doesn't care — a Node.js client would work identically. That's demo-02."
+   doesn't care. Now let's look at advanced client capabilities in demo-02.\"
 
-**Demo 2 — Cross-language (`demo-02` · 8 min)**
-1. Prerequisites: Python server on 8000, Node.js server on 3001.
-2. Run it. Part A inspects Python server tools. Part B inspects Node.js tools.
-   Part C compares schemas. Part D calls Node.js tools from Python client.
-3. *"The tool schemas are IDENTICAL. Same names. Same args. Same JSON return
-   shape. The language of the server is an implementation detail."*
-4. If Node.js server isn't available, the demo still works — it gracefully
-   reports which servers it could connect to and shows the comparison for
-   available ones.
+**Demo 2 — Advanced Client Patterns (`demo-02` · 8 min)**
+1. Prerequisites: Python server on 8000, and OPENROUTER_API_KEY in .env.
+2. Run it. The script demonstrates Roots, Elicitation (simulated), and Progressive Tool Discovery.
+3. *"10,000 schemas would blow up the context window. We start the LLM with ONE meta-tool: search_tools."*
+4. Watch the terminal as the client dynamically discovers `get_build_status` and injects its schema into the LLM context mid-loop.
 
 **Demo 3 — Break it (`demo-03` · 10 min, deterministic)**
 1. Prerequisites: MCP server on port 8000.
@@ -168,10 +163,9 @@ exist and got an answer. That's the shift."*
 3. `python scripts/week-05/demo-01-wire-server.py` in another.
 Walk around. *Common issues:* Qdrant not running, wrong port, `.env` missing.
 
-**Step 3: demo-02 live (6 min) — YOU.** Cross-language. Connect Python client
-to Node.js server. *"Same tools. Same JSON. Different language under the hood."*
-If Node.js isn't available, narrate the concept and show the schema comparison
-from the Python-only path.
+**Step 3: demo-02 live (6 min) — YOU.** Advanced Client Patterns. Run the script.
+*"Watch the LLM search for a tool, and watch the client dynamically inject the schema."*
+Discuss why Roots (workspace scoping) and Elicitation (human-in-the-loop auth) are critical for enterprise adoption.
 
 **Step 4: demo-03 live (8 min) — YOU.** Break it: wrong port, wrong tool name,
 server down, recovery. Then have them run it themselves. *"These are the error
@@ -208,8 +202,8 @@ tools are remote. Swap the URL and it never notices. That's the ecosystem."*
 2. **Security (5 min).** "What's the worst thing someone could do if they
    reached your MCP server? What would you add before production?"
    → auth, rate limiting, read-only defaults, audit logging.
-3. **Cross-language (4 min).** "Did anyone try Python client → Node.js server?
-   Does it work? The protocol IS the contract — not the language."
+3. **Enterprise Readiness (4 min).** "Why do we need Roots? Why do we need Progressive Discovery?"
+   → Context windows are finite. We must bind tools at runtime."
 4. **When NOT to use MCP (4 min).** "If you have one team, one tool, no
    sharing — just import it (Week 4 style). MCP overhead isn't free."
 5. **Preview Week 6 (4 min).** "Next week: Agentic workflows. We chain Weeks
@@ -226,7 +220,7 @@ tools are remote. Swap the URL and it never notices. That's the ecosystem."*
 | **MCP server doesn't start** | Check Qdrant first. Then check `.env` has `OPENROUTER_API_KEY`. Port 8000 already in use? Kill the process. |
 | **Client can't connect to server** | Check URL (`http://127.0.0.1:8000/sse`). Wrong port? Server running? |
 | **Tool returns `unknown` instead of data** | RAG extraction depends on chunk quality. Try `service_name=auth-service` first — it has the richest data. |
-| **Cross-language demo fails** | Node.js server not running? Port mismatch? The demo gracefully reports unavailable servers. |
+| **Client-scaling demo fails** | Missing OPENROUTER_API_KEY? The LLM orchestration loop requires API access. |
 | **demo-03 Act 3 (server down) doesn't fail** | Server is still running. Kill it (`Ctrl+C`). The error should change from "tool works" to "connection refused". |
 | **LLM doesn't call any tools (demo-05)** | Tool descriptions may be too vague. The conversion from MCP schema to LangChain may lose precision. |
 | **Token costs higher than expected** | Each demo-05 round is a full LLM call. Results re-enter context. This IS the lesson — cost compounds. |
@@ -238,7 +232,7 @@ tools are remote. Swap the URL and it never notices. That's the ecosystem."*
 
 ## Post-Session Checklist
 
-- [ ] Runbook `week-05.md` updated: cross-language observations, security notes, ADR seed
+- [ ] Runbook `week-05.md` updated: client scaling observations, security notes, ADR seed
 - [ ] Channel message: classroom assignment (48 h) + self-learning Parts A–D (before Week 6)
 - [ ] Encourage the **MCP eval** run (`shared/evals/week-05-mcp-tool-ecosystem.yaml`)
 - [ ] Note model-behaviour drift / demo flakiness for ops before the rerun
@@ -254,7 +248,7 @@ tools are remote. Swap the URL and it never notices. That's the ecosystem."*
 | Transport | SSE on port 8000 | SSE on port 3001 |
 | Tools | `get_build_status`, `get_recent_deploys`, `get_active_incidents` | same 3 tools, identical schemas |
 | Client demos | `scripts/week-05/demo-01-wire-server.py` | `scripts/week-05/demo-01-mcp-client.js` |
-| Cross-language | Python client → Python or Node.js server | Python client → Node.js or Python server |
+| Advanced Client | `demo-02-client-scaling.py` (Roots, Discovery) | (Not demonstrated in Node.js path) |
 | Tests | `tests/test_mcp_server.py` | `tests/test_mcp_server.js` |
 
 Both servers expose the same 3 RAG-powered tools. Same protocol (JSON-RPC over SSE).
