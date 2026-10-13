@@ -170,6 +170,70 @@ class ServiceReadinessReport(BaseModel):
         return self
 
 
+# ═══════════════════════════════════════════════════════════════
+# Week 6 — Agent contracts
+#
+# The agent composes Week 2's contract style into its own output.
+# ReadinessVerdict and EvidenceChunk are REUSED as-is — composition
+# over duplication. AgentAnswer is the one new shape the agent needs:
+# an answer to ANY query type, with an optional readiness verdict.
+# ═══════════════════════════════════════════════════════════════
+
+class Incident(BaseModel):
+    """An active incident as returned by the MCP get_active_incidents tool."""
+    id: str = Field(description="Incident ID, e.g. 'INC-901'")
+    severity: str = Field(description="Severity, e.g. 'Sev1'")
+    date: Optional[str] = Field(None, description="ISO date the incident was opened")
+    summary: str = Field(default="", description="One-line description of the incident")
+    status: str = Field(description="Lifecycle status, e.g. 'investigating' or 'resolved'")
+
+
+class AgentAnswer(BaseModel):
+    """
+    Week 6 — the agent's structured answer to any query.
+
+    - ``answer``  — the direct response, always present.
+    - ``verdict`` — set for readiness/health queries (ready, blockers,
+      next steps — the Week 2 ReadinessVerdict, reused not redefined).
+      ``None`` for docs/deploy/incident queries where "ready" is meaningless.
+    - ``evidence`` — where each claim came from (rag | tool | user),
+      using the Week 2 EvidenceChunk contract.
+
+    Cross-field rules mirror Week 2's sanity checks, so an answer where
+    the model contradicts itself is REJECTED at the boundary — the same
+    validator style they wrote in Week 2.
+    """
+    answer: str = Field(description="Direct, one-paragraph answer to the user's query")
+    verdict: Optional[ReadinessVerdict] = Field(
+        None,
+        description="Set for readiness/health queries; None for other query types",
+    )
+    evidence: list[EvidenceChunk] = Field(
+        default_factory=list,
+        description="What the answer is based on — one chunk per data source used",
+    )
+
+    @model_validator(mode="after")
+    def verdict_sanity_check(self):
+        """Week 2's contradiction rule, applied to the agent's output."""
+        if self.verdict is not None:
+            if self.verdict.ready and self.verdict.blockers:
+                raise ValueError(
+                    "Contradiction: verdict.ready=True but blockers are listed. "
+                    "If there are blockers, ready must be False."
+                )
+            if (
+                not self.verdict.ready
+                and self.verdict.confidence != "low"
+                and not self.verdict.blockers
+            ):
+                raise ValueError(
+                    f"verdict.ready=False with confidence='{self.verdict.confidence}' "
+                    "but no blockers listed. Add blockers or lower confidence."
+                )
+        return self
+
+
 def analyze_pr(
     title: str,
     diff: str,

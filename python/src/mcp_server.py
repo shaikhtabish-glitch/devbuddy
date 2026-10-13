@@ -112,8 +112,9 @@ def get_build_status(service_name: str) -> str:
     return _synthesise(
         instructions=(
             "Extract the current build/health status for the given service. "
-            "Return JSON with 'status' (one of: healthy, degraded, down, unknown) "
-            "and 'last_deploy' (ISO timestamp). "
+            "Return JSON with 'status' (one of: healthy, degraded, down, unknown), "
+            "'last_deploy' (ISO timestamp), and 'failing_since' (ISO timestamp — "
+            "REQUIRED when status is degraded or down, null otherwise). "
         ),
         query=f"{service_name} build status health check deploy",
     )

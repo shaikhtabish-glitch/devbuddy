@@ -10,7 +10,7 @@ Run: python scripts/week-06/demo-02-dynamic-routing.py
 import os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.agent import run_dynamic_agent
+from src.agent import run_dynamic_agent, format_report
 
 print()
 print("=" * 65)
@@ -34,17 +34,15 @@ for query, label in queries:
     result = run_dynamic_agent(query)
     time.sleep(1)  # let SSE connection close cleanly before next query
 
-    # Reconstruct the step sequence from state
-    steps_taken = ["📄 docs"]  # always runs retrieve first
-    if result.get("build_status"): steps_taken.append("🏗️  build")
-    if result.get("deploys"):     steps_taken.append("🚀 deploys")
-    if result.get("incidents"):   steps_taken.append("🚨 incidents")
-    steps_taken.append("📝 report")  # always ends with report
+    # The path is what the agent RECORDED — an audit trail, not a guess.
+    path = [m["step"] for m in result["messages"]]
 
     print(f"  ⚡  Steps: {result['steps']}  |  Cost: ${result['cost']:.6f}")
-    print(f"  🔀  Path:   {' → '.join(steps_taken)}")
+    print(f"  🔀  Path:   {' → '.join(path)}")
+    if result["error"]:
+        print(f"  ⚠️   Error:  {result['error']}")
     print(f"  {'─' * 59}")
-    print(f"  {result['report'][:300]}")
+    print(format_report(result["report"]))
     print()
 
 print("=" * 65)

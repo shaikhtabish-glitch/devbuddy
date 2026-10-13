@@ -10,7 +10,7 @@ Run: python scripts/week-06/demo-03-conversational-agent.py
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.agent import run_dynamic_agent
+from src.agent import run_dynamic_agent, format_report
 
 print("=" * 70)
 print("  DevBuddy Agent — Conversational Mode")
@@ -54,8 +54,11 @@ while True:
     total_cost += result.get("cost", 0)
 
     print(f"  Steps: {result['steps']}  |  Cost: ~${result['cost']:.6f}")
+    print(f"  Path: {' → '.join(m['step'] for m in result['messages'])}")
     print(f"  ─────────────────────────────────────────────")
-    print(f"  {result['report']}")
+    if result.get("error"):
+        print(f"  ⚠️   {result['error']}")
+    print(format_report(result.get("report")))
     print()
 
 print()

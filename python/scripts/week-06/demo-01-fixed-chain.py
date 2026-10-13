@@ -16,7 +16,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from src.llm import get_llm
 from src.agent import (
     extract_service, retrieve_context, check_build,
-    generate_report, AgentState, _init_state, _call_mcp_tool,
+    generate_report, AgentState, _init_state, format_report,
 )
 
 print()
@@ -53,12 +53,14 @@ def trace_fixed_chain(query: str):
     # Step 3: Check build
     print(f"  [3/4]  BUILD  — Call get_build_status({state['service_name']})")
     state = check_build(state)
-    try:
-        bs = json.loads(state["build_status"])
-        print(f"          →  status = {bs.get('status', '?').upper()}")
-        print(f"          →  last deploy = {bs.get('last_deploy', '?')}")
-    except json.JSONDecodeError:
-        print(f"          →  {state['build_status'][:100]}")
+    if state["build_status"]:
+        bs = state["build_status"]
+        print(f"          →  status = {bs.status.upper()}")
+        print(f"          →  last deploy = {bs.last_deploy}")
+        if bs.failing_since:
+            print(f"          →  failing since = {bs.failing_since}")
+    else:
+        print(f"          →  ❌ {state['error']}")
     print()
 
     # Step 4: Generate report
@@ -68,8 +70,12 @@ def trace_fixed_chain(query: str):
     print()
 
     print(f"  {'─' * 59}")
-    print(f"  📤  REPORT:")
-    print(f"  {state['report']}")
+    print(f"  📤  REPORT (structured AgentAnswer — Week 2 contract):")
+    print(format_report(state["report"]))
+    print()
+    print(f"  🧾  AUDIT TRAIL (recorded, not reconstructed):")
+    for m in state["messages"]:
+        print(f"          • {m}")
     print()
 
 
