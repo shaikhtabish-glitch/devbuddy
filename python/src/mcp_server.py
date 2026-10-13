@@ -114,9 +114,19 @@ def get_build_status(service_name: str) -> str:
             "Extract the current build/health status for the given service. "
             "Return JSON with 'status' (one of: healthy, degraded, down, unknown), "
             "'last_deploy' (ISO timestamp), and 'failing_since' (ISO timestamp — "
-            "REQUIRED when status is degraded or down, null otherwise). "
+            "REQUIRED when status is degraded or down, null otherwise).\n"
+            "DECISION ORDER (follow strictly):\n"
+            "1. Consider ONLY this service. Ignore other services entirely.\n"
+            "2. Find its MOST RECENT deploy. If that deploy's status is 'success' "
+            "AND it has no UNRESOLVED incident dated after it, status = 'healthy', "
+            "failing_since = null.\n"
+            "3. Incidents with status 'Resolved' are history — they never make the "
+            "current status anything but healthy.\n"
+            "4. status = 'degraded'/'down' ONLY with evidence dated AFTER the last "
+            "successful deploy (an unresolved incident, or a later failed/"
+            "rolling_back deploy); failing_since = that evidence's date."
         ),
-        query=f"{service_name} build status health check deploy",
+        query=f"{service_name} latest deploy build health status most recent",
     )
 
 

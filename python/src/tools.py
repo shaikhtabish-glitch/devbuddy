@@ -258,6 +258,28 @@ def execute_tool_safely(tool_call: dict, max_retries: int = 2,
     })
 
 
+def _final_answer(llm, messages) -> tuple[str, object]:
+    """Force a non-empty text answer from the model.
+
+    Providers occasionally return an EMPTY completion for an exact
+    message shape (deterministic at temperature=0 — identical request,
+    identical empty response). An empty answer is never a valid outcome
+    of a tool loop, so retry once with an explicit nudge.
+
+    Returns:
+        (answer_text, message) — message carries usage for tracing.
+    """
+    text, response = "", None
+    for _ in range(2):
+        response = llm.invoke(messages)
+        text = _as_text(response)
+        if text.strip():
+            break
+        messages = messages + [HumanMessage(
+            content="Provide your final answer now, in plain text.")]
+    return text, response
+
+
 def run_tool_loop(user_query: str, temperature: float = 0.0) -> str:
     """
     Full tool-calling loop: Request → Decide → Execute → Return → Answer.
@@ -293,14 +315,17 @@ def run_tool_loop(user_query: str, temperature: float = 0.0) -> str:
         messages.append(response)
 
         if not response.tool_calls:
-            return _as_text(response)
+            text = _as_text(response)
+            if text.strip():
+                return text
+            return _final_answer(llm, messages)[0]
 
         for tc in response.tool_calls:
             result = execute_tool_safely(tc)
             messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
 
     # The model kept calling tools — drop the tools and force a text answer.
-    return _as_text(llm.invoke(messages))
+    return _final_answer(llm, messages)[0]
 
 
 def run_tool_loop_with_trace(user_query: str, temperature: float = 0.0) -> dict:
@@ -350,7 +375,15 @@ def run_tool_loop_with_trace(user_query: str, temperature: float = 0.0) -> dict:
 
         if not response.tool_calls:
             trace["answer"] = _as_text(response)
-            _append_answer_step(trace["answer"], response)
+            answer_msg = response
+            if not trace["answer"].strip():
+                # empty completion → forced retry (see _final_answer)
+                trace["steps"].append({"type": "decide",
+                                       "content": "(empty completion — retrying)",
+                                       "tokens": {}})
+                trace["answer"], answer_msg = _final_answer(llm, messages)
+                _accrue(_usage_of(answer_msg))
+            _append_answer_step(trace["answer"], answer_msg)
             trace["usage"] = usage_totals
             return trace
 
@@ -362,8 +395,9 @@ def run_tool_loop_with_trace(user_query: str, temperature: float = 0.0) -> dict:
             trace["steps"].append({"type": "execute", "tool": tc["name"], "result": result[:200]})
 
     # The model kept calling tools — drop the tools and force a text answer.
-    final = llm.invoke(messages)
-    trace["answer"] = _as_text(final)
+    final_answer, final = _final_answer(llm, messages)
+    trace["answer"] = final_answer
+    _accrue(_usage_of(final))
     _append_answer_step(trace["answer"], final)
     trace["usage"] = usage_totals
     return trace

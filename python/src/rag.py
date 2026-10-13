@@ -128,6 +128,7 @@ def index_documents(
     directory: str | None = None,
     chunk_size: int = 512,
     chunk_overlap: int = 64,
+    force: bool = False,
 ) -> int:
     """
     Load .md and .txt files from a directory, chunk them, embed them,
@@ -137,9 +138,10 @@ def index_documents(
         directory: Path to document directory. Defaults to shared/data/.
         chunk_size: Max tokens per chunk.
         chunk_overlap: Overlapping tokens between chunks.
+        force: Re-embed even if the collection already has data.
 
     Returns:
-        Number of chunks indexed.
+        Number of chunks indexed (0 when reusing an existing collection).
     """
     global _vectorstore, _documents
 
@@ -178,13 +180,16 @@ def index_documents(
     client = QdrantClient(url=QDRANT_URL)
     try:
         info = client.get_collection(QDRANT_COLLECTION)
-        if info.points_count and info.points_count > 0:
-            # Already indexed — just reconnect to existing collection
+        if info.points_count and info.points_count > 0 and not force:
+            # Already indexed — reconnect to the existing collection.
+            # The BM25 corpus (_documents) must be populated too, or
+            # hybrid_search breaks after a reuse.
             _vectorstore = QdrantVectorStore(
                 client=client,
                 collection_name=QDRANT_COLLECTION,
                 embedding=emb,
             )
+            _documents = chunks
             return 0  # nothing new to index
         client.delete_collection(QDRANT_COLLECTION)
     except Exception:
@@ -212,6 +217,33 @@ def index_documents(
     return len(chunks)
 
 
+def _ensure_vectorstore():
+    """Attach to an existing Qdrant collection if this process hasn't
+    indexed anything yet (Week 6 fix — mirrors nodejs/src/rag.js).
+
+    Read-only: no embedding, no writes. Raises with the same message
+    the old eager check used when there is genuinely no index.
+    """
+    global _vectorstore
+    if _vectorstore is not None:
+        return _vectorstore
+    try:
+        client = QdrantClient(url=QDRANT_URL)
+        info = client.get_collection(QDRANT_COLLECTION)
+        if not (info.points_count and info.points_count > 0):
+            raise RuntimeError("collection is empty")
+        _vectorstore = QdrantVectorStore(
+            client=client,
+            collection_name=QDRANT_COLLECTION,
+            embedding=_get_embeddings(),
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"No index found. Run index_documents() first. ({e})"
+        ) from e
+    return _vectorstore
+
+
 def retrieve(query: str, k: int = 3) -> list[str]:
     """
     Retrieve the top-k most relevant chunks for a query.
@@ -223,9 +255,8 @@ def retrieve(query: str, k: int = 3) -> list[str]:
     Returns:
         List of chunk content strings, most relevant first.
     """
-    if _vectorstore is None:
-        raise RuntimeError("No index found. Run index_documents() first.")
-    results = _vectorstore.similarity_search(query, k=k)
+    store = _ensure_vectorstore()
+    results = store.similarity_search(query, k=k)
     return [doc.page_content for doc in results]
 
 
@@ -248,9 +279,8 @@ def retrieve_with_sources(
         List of RetrievedChunk (content + source + score), most relevant
         first. May be shorter than k when min_score filters results.
     """
-    if _vectorstore is None:
-        raise RuntimeError("No index found. Run index_documents() first.")
-    results = _vectorstore.similarity_search_with_score(query, k=k)
+    store = _ensure_vectorstore()
+    results = store.similarity_search_with_score(query, k=k)
     if min_score is not None:
         results = [(doc, score) for doc, score in results if score >= min_score]
     return [

@@ -14,22 +14,47 @@ def _build_index():
     rag._documents = None
     rag._embeddings = None
     count = index_documents(chunk_size=512, chunk_overlap=64)
-    assert count > 0, "No documents were indexed"
+    if count == 0:
+        # Populated collection → reuse path (no re-embed). It must still
+        # leave the module fully usable: store reconnected, BM25 corpus set.
+        assert rag._vectorstore is not None, "reuse must reconnect the store"
+        assert rag._documents, "reuse must repopulate the BM25 corpus"
 
 
 def test_rag_imports_llm():
-    """rag.py imports from llm.py — the import graph holds."""
-    from src.rag import grounded_answer
+    """rag.py imports from llm.py — the import graph holds.
+
+    Checks the whole delegation CHAIN (grounded_answer →
+    grounded_answer_from_chunks → answer_with_context → get_llm),
+    not just one function frame — a substring check on a delegating
+    function would pass or fail for the wrong reason.
+    """
     import inspect
-    source = inspect.getsource(grounded_answer)
-    assert "get_llm" in source, "grounded_answer should call get_llm() from src.llm"
+    import src.rag as rag
+
+    assert "from src.llm import get_llm" in inspect.getsource(rag), \
+        "rag.py must import the Week 1 provider"
+
+    chain = inspect.getsource(rag.grounded_answer)
+    if "grounded_answer_from_chunks" in chain:
+        chain += inspect.getsource(rag.grounded_answer_from_chunks)
+    if "answer_with_context" in chain and hasattr(rag, "answer_with_context"):
+        chain += inspect.getsource(rag.answer_with_context)
+    assert "get_llm" in chain, \
+        "grounded_answer must reach get_llm through its delegation chain"
 
 
 def test_index_creates_chunks():
-    """Indexing produces chunks stored in ChromaDB."""
-    # Re-index to get fresh count
+    """Indexing produces chunks — or reconnects to an existing populated
+    collection, in which case the module must still be fully usable."""
+    import src.rag as rag
     count = index_documents(chunk_size=512)
-    assert count >= 4, f"Expected at least 4 chunks, got {count}"
+    if count == 0:
+        assert rag._vectorstore is not None
+        assert rag._documents, "reuse path must repopulate the BM25 corpus"
+        assert retrieve("payment", k=1), "reused collection must retrieve"
+    else:
+        assert count >= 4, f"Expected at least 4 chunks, got {count}"
 
 
 def test_retrieve_returns_relevant_chunks():
@@ -97,8 +122,8 @@ def test_hybrid_search_includes_keyword_matches():
 
 def test_chunk_size_changes_chunk_count():
     """Different chunk sizes produce different numbers of chunks."""
-    count_256 = index_documents(chunk_size=256)
-    count_1024 = index_documents(chunk_size=1024)
+    count_256 = index_documents(chunk_size=256, force=True)
+    count_1024 = index_documents(chunk_size=1024, force=True)
 
     # Smaller chunks = more chunks. Larger chunks = fewer.
     assert count_256 > count_1024, (
@@ -106,14 +131,23 @@ def test_chunk_size_changes_chunk_count():
         f"than chunk_size=1024 ({count_1024})"
     )
     # Restore default size for subsequent tests
-    index_documents(chunk_size=512)
+    index_documents(chunk_size=512, force=True)
 
 
 def test_unindexed_retrieve_raises():
-    """Calling retrieve without an index raises a clear error."""
+    """retrieve with no usable collection raises a clear error.
+
+    The Week 6 lazy-connect attaches to an EXISTING index — it never
+    invents one — so pointing at a collection that doesn't exist must
+    still raise 'No index found'.
+    """
     import src.rag as rag
-    old_vs = rag._vectorstore
+    old_vs, old_coll = rag._vectorstore, rag.QDRANT_COLLECTION
     rag._vectorstore = None
-    with pytest.raises(RuntimeError, match="No index found"):
-        retrieve("test query")
-    rag._vectorstore = old_vs
+    rag.QDRANT_COLLECTION = "no-such-collection"
+    try:
+        with pytest.raises(RuntimeError, match="No index found"):
+            retrieve("test query")
+    finally:
+        rag._vectorstore = old_vs
+        rag.QDRANT_COLLECTION = old_coll
