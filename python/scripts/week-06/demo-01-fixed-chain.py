@@ -1,93 +1,89 @@
 """
-Demo 1: Fixed Chain — extract → retrieve → build → report
+Demo 1 (C1): Fixed Chain — a state machine, not a for-loop
 
-Runs the fixed 4-step agent and traces every step so you can
-see exactly what the chain does. No black box — every step,
-its input, and its output are shown.
+build_fixed_chain() compiles nodes + hardcoded edges into a LangGraph
+runtime. We STREAM it: the graph drives node → node, and after every
+transition you see which state fields the node filled — and which are
+still empty (that emptiness is the fuel for C2, demo-04).
 
-Requires: MCP server running (python src/mcp_server.py in another terminal)
+Requires: MCP server (python src/mcp_server.py) + Qdrant (docker-compose up -d)
 Run: python scripts/week-06/demo-01-fixed-chain.py
 """
-import os, sys, json
+import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from langgraph.graph import StateGraph, END
-from langchain_core.messages import HumanMessage, SystemMessage
-from src.llm import get_llm
-from src.agent import (
-    extract_service, retrieve_context, check_build,
-    generate_report, AgentState, _init_state, format_report,
-)
+from src.agent import build_fixed_chain, _init_state, format_report
 
-print()
-print("=" * 65)
-print("  Demo 1: Fixed Chain — Trace Every Step")
-print("=" * 65)
-print()
-print("  A fixed chain is a PREDEFINED sequence of steps.")
-print("  The path never changes regardless of the query.")
-print("  Each step is traced below so you can see the flow.")
-print()
+DATA_FIELDS = ("service_name", "context", "build_status", "deploys",
+               "incidents", "report")
+
+
+def _empty(value) -> bool:
+    return value is None or value == ""
 
 
 def trace_fixed_chain(query: str):
-    """Run the fixed chain step-by-step with tracing."""
+    """Stream the compiled graph — each event is one node transition."""
 
     state = _init_state(query)
     print(f"  📥  QUERY: \"{query}\"")
     print(f"  {'─' * 59}")
 
-    # Step 1: Extract service
-    print(f"  [1/4]  EXTRACT  — Which service is the query about?")
-    state = extract_service(state)
-    print(f"          →  service = {state['service_name']}")
-    print()
+    agent = build_fixed_chain()   # compile(): nodes + edges → runnable graph
+    # edges (hardcoded — THIS is what "fixed" means):
+    #   extract_service → retrieve → check_build → report → END
 
-    # Step 2: Retrieve context
-    print(f"  [2/4]  RETRIEVE  — Search docs for relevant context")
-    state = retrieve_context(state)
-    context_preview = state["context"][:120].replace("\n", " ")
-    print(f"          →  {context_preview}...")
-    print()
+    seen_events = 0
+    for event in agent.stream(state):
+        for node_name, update in event.items():
+            state = {**state, **update}
 
-    # Step 3: Check build
-    print(f"  [3/4]  BUILD  — Call get_build_status({state['service_name']})")
-    state = check_build(state)
-    if state["build_status"]:
-        bs = state["build_status"]
-        print(f"          →  status = {bs.status.upper()}")
-        print(f"          →  last deploy = {bs.last_deploy}")
-        if bs.failing_since:
-            print(f"          →  failing since = {bs.failing_since}")
-    else:
-        print(f"          →  ❌ {state['error']}")
-    print()
+            node_events = state["messages"][seen_events:]
+            seen_events = len(state["messages"])
+            filled = [k for k in DATA_FIELDS if not _empty(state[k])]
+            pending = [k for k in DATA_FIELDS if _empty(state[k])]
 
-    # Step 4: Generate report
-    print(f"  [4/4]  REPORT  — Synthesize findings into a report")
-    state = generate_report(state)
-    print(f"          →  cost = ${state['cost']:.6f}")
-    print()
+            print(f"  ▶ {node_name}")
+            for audit in node_events:
+                detail = {k: v for k, v in audit.items() if k not in ("step", "cost")}
+                cost = f"  · ${audit['cost']:.6f}" if audit.get("cost") else ""
+                print(f"      audit      : {detail}{cost}")
+            print(f"      filled     : {', '.join(filled) or '—'}")
+            print(f"      still empty: {', '.join(pending) or '—'}"
+                  + ("   ← a node that never fills these = C2 (demo-04)"
+                     if pending else ""))
+            print()
 
     print(f"  {'─' * 59}")
     print(f"  📤  REPORT (structured AgentAnswer — Week 2 contract):")
     print(format_report(state["report"]))
     print()
-    print(f"  🧾  AUDIT TRAIL (recorded, not reconstructed):")
+    print(f"  🧾  AUDIT TRAIL (recorded by the nodes, with per-step cost):")
     for m in state["messages"]:
         print(f"          • {m}")
+    print(f"  ⚡  TOTAL: {state['steps']} steps · ${state['cost']:.6f}")
     print()
 
 
-# ── Run two queries ────────────────────────────────────────────
+# ── Run two queries — same path, every time ────────────────────
+
+print()
+print("=" * 65)
+print("  Demo 1 (C1): Fixed Chain — the graph drives the transitions")
+print("=" * 65)
+print()
+print("  Nodes are functions. Edges are hardcoded. The RUNTIME walks")
+print("  them — nothing below is a hand-written for-loop.")
+print()
 
 trace_fixed_chain("Is the payment-api ready for v2.1?")
 trace_fixed_chain("Is the auth-service ready for release?")
 
 print("=" * 65)
-print("  Fixed chain: 4 steps. Same sequence every time.")
-print("  🔀  Path:  📄 docs → 🏗️ build → 📝 report")
-print("  Predictable and auditable, but can't add steps like")
-print("  deploys or incidents. Run demo-02 for dynamic routing.")
+print("  Fixed chain: same edges, same order, both queries — 4 nodes.")
+print("  🔀  extract → retrieve → check_build → report → END")
+print("  Predictable and auditable, but it CANNOT skip a step or add")
+print("  one (no deploys/incidents nodes here). See demo-02 for a graph")
+print("  whose edges are chosen at runtime.")
 print("=" * 65)
 print()

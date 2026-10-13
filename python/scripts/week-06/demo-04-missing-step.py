@@ -11,7 +11,7 @@ This is the SAME mechanism as Week 4's tool-error hallucination.
 Requires: MCP server (python src/mcp_server.py) + Qdrant (docker-compose up -d)
 Run: python scripts/week-06/demo-04-missing-step.py
 """
-import os, sys
+import os, sys, re
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.agent import (
@@ -49,27 +49,63 @@ print()
 
 # ── Did it invent build data? ──────────────────────────────────
 
-blob = " ".join(
-    [result["report"].answer]
-    + [e.content for e in result["report"].evidence]
-    + (result["report"].verdict.blockers if result["report"].verdict else [])
-    + (result["report"].verdict.recommended_next_steps if result["report"].verdict else [])
-).lower()
-claims = [w for w in ("build", "ci", "passing", "green", "healthy", "compiled")
-          if w in blob]
+# Structural detection — check claims against STATE, not keywords:
+#
+# 1) fabricated tool evidence: an evidence chunk citing source='tool'
+#    for build data while state['build_status'] is None is a lie the
+#    state itself proves.
+# 2) affirmative build claims: status words near 'build' — with hedges
+#    ("not checked", "no data", "unknown") excluded, because an honest
+#    hedge is NOT a hallucination.
+# (A naive keyword count would false-positive on "incidents" — it
+#  contains "ci" — and would flag honest hedges that mention "build".)
 
-print(f"  🔎  DETECTION:")
-print(f"      build_status in state : None (never checked)")
-print(f"      report talks about    : {', '.join(claims) if claims else 'NOTHING about the build'}")
-if claims:
-    print(f"      → HALLUCINATION: the model filled a gap your code left open.")
-    print(f"        It didn't 'decide' the build was fine — an empty state")
-    print(f"        plus a report-shaped prompt makes invention the most")
-    print(f"        probable next token.")
+report = result["report"]
+fabricated = [
+    e.content[:80].replace("\n", " ")
+    for e in report.evidence
+    if e.source == "tool" and "build" in e.content.lower()
+]
+
+haystack = " ".join(
+    [report.answer]
+    + [e.content for e in report.evidence]
+    + (report.verdict.blockers if report.verdict else [])
+    + (report.verdict.recommended_next_steps if report.verdict else [])
+).lower()
+
+affirmative = re.search(
+    r"build[^.\n]{0,60}\b(healthy|passing|green|success\w*|degraded|down|failing|compiled)\b"
+    r"|\b(healthy|passing|green|compiled)\b[^.\n]{0,40}build",
+    haystack,
+)
+hedged = re.search(
+    r"build[^.\n]{0,60}(not checked|no (build )?data|never (been )?checked|unknown|missing)"
+    r"|(not checked|no data|never checked)[^.\n]{0,40}build",
+    haystack,
+)
+
+detected = bool(fabricated) or bool(affirmative)
+
+print("  🔎  DETECTION (state vs. claims — not keyword counting):")
+print(f"      state['build_status']      : None (never checked)")
+print(f"      fabricated tool evidence   : {fabricated or 'none'}")
+if affirmative:
+    print(f"      affirmative build claim    : {affirmative.group(0)!r}")
 else:
-    print(f"      → The model hedged this time. The VULNERABILITY is still")
-    print(f"        real: nothing in this graph stops it from inventing.")
-    print(f"        Hedging is luck, not a guardrail.")
+    print("      affirmative build claim    : none")
+if hedged:
+    print(f"      hedge present              : {hedged.group(0)!r}")
+print()
+if detected:
+    print("      → HALLUCINATION: the report asserts (or cites tool evidence for)")
+    print("        build data that state says was never collected. The model")
+    print("        filled a gap YOUR graph left open — it predicts tokens,")
+    print("        it doesn't check state.")
+else:
+    print("      → The model hedged this run (no affirmative claim). The")
+    print("        VULNERABILITY is still real: nothing in this graph stops")
+    print("        it from inventing. Hedging is luck, not a guardrail.")
 print()
 
 # ── The same missing step, with the guard attached ─────────────

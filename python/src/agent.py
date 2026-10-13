@@ -239,8 +239,12 @@ class AgentState(TypedDict):
 
 
 def _record(state: AgentState, step: str, **detail) -> None:
-    """Append one event to the audit trail. Every node records itself."""
-    state["messages"].append({"step": step, **detail})
+    """Append one event to the audit trail. Every node records itself,
+    and carries the COST DELTA since the previous event — so per-step
+    cost is traceable, not just the run total."""
+    prev_total = sum(m.get("cost", 0.0) for m in state["messages"])
+    state["messages"].append(
+        {"step": step, **detail, "cost": round(state["cost"] - prev_total, 6)})
 
 
 def _init_state(query: str) -> AgentState:
@@ -495,6 +499,8 @@ def generate_report(state: AgentState) -> AgentState:
         except Exception as e:
             last_exc = e
 
+    # accrue BEFORE recording, so the cost lands on this event's delta
+    state["cost"] += _usage_cost(capture.usage)
     if answer is not None:
         state["report"] = answer
         _record(state, "generate_report",
@@ -509,7 +515,6 @@ def generate_report(state: AgentState) -> AgentState:
         )
         _record(state, "generate_report", status="failed", error=str(last_exc))
     state["steps"] += 1
-    state["cost"] += _usage_cost(capture.usage)
     return state
 
 
@@ -561,15 +566,16 @@ def generate_report_naive(state: AgentState) -> AgentState:
             [SystemMessage(content=system), HumanMessage(content=sections)],
             config={"callbacks": [capture]},
         )
+        state["cost"] += _usage_cost(capture.usage)  # before the record
         state["report"] = answer
         _record(state, "generate_report_naive",
                 ready=answer.verdict.ready if answer.verdict else None)
     except Exception as e:
+        state["cost"] += _usage_cost(capture.usage)
         state["error"] = f"generate_report_naive: {type(e).__name__}: {e}"
         state["report"] = AgentAnswer(answer="(naive report failed)")
         _record(state, "generate_report_naive", status="failed", error=str(e))
     state["steps"] += 1
-    state["cost"] += _usage_cost(capture.usage)
     return state
 
 
@@ -859,6 +865,7 @@ def plan(state: AgentState) -> AgentState:
         # this query (anti-cascade-by-contract). Re-ask ONCE with the
         # correction; if the model can't course-correct, the GUARD
         # decides — never an unbounded loop, never the prompt alone.
+        original = proposal
         retry = router(state, correction=(
             f"'{proposal}' is not appropriate right now — it is either already "
             "collected or not needed for this query type. Needed steps: "
@@ -872,7 +879,10 @@ def plan(state: AgentState) -> AgentState:
             proposal = "report" if not _required_missing(state, categories) else "validate"
             decision = "fallback"
         state["next_step"] = proposal
-        _record(state, "plan", proposal=proposal, decision=decision)
+        # proposal = what the model FIRST said; corrected_to = what the
+        # code actually dispatched (or resolved to via fallback).
+        _record(state, "plan", proposal=original, decision=decision,
+                corrected_to=proposal)
         return state
 
     state["next_step"] = proposal

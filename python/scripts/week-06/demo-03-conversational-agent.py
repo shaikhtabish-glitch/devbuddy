@@ -46,6 +46,12 @@ while True:
         print("       'Any incidents for inventory-service?'")
         print("       'Give me a full readiness report for payment-api'")
         print()
+        print("  Worth poking at:")
+        print("       'Deploy auth-service to production'")
+        print("         → no deploy tool exists — the registry refuses")
+        print("       'What does the payment-api spec say?'")
+        print("         → docs-only query: the router should skip the tools")
+        print()
         continue
 
     turn += 1
