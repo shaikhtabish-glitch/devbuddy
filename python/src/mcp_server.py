@@ -12,7 +12,7 @@ Imports: from src.rag import retrieve, index_documents
          from src.llm import get_llm
          from langchain_core.messages import HumanMessage, SystemMessage
 """
-import os, sys, json
+import os, sys, json, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Load .env for API keys (OPENROUTER_API_KEY needed by get_llm)
@@ -87,29 +87,47 @@ def _synthesise(instructions: str, query: str, k: int = 5) -> str:
         return json.dumps({
             "status": "unknown",
             "reason": f"tool error: {type(e).__name__} — {str(e)}"
-        })# ── Tools ─────────────────────────────────────────────────────
+        })
+
+# ── Tools ─────────────────────────────────────────────────────
+_rate_limits = {"get_build_status": {"count": 0, "window_start": time.time()}}
+
+def _check_rate_limit(tool_name: str, limit: int = 3, window_seconds: int = 10):
+    """Real rate limiting implementation."""
+    now = time.time()
+    state = _rate_limits.setdefault(tool_name, {"count": 0, "window_start": now})
+    
+    if now - state["window_start"] > window_seconds:
+        state["count"] = 1
+        state["window_start"] = now
+    else:
+        state["count"] += 1
+        if state["count"] > limit:
+            raise ValueError(f"RateLimitExceeded: Tool '{tool_name}' called too many times. Limit {limit} per {window_seconds}s.")
 
 @mcp.tool()
 def get_build_status(service_name: str) -> str:
-    """
-    Return the current build/health status for a given service.
-    Searches the RAG index for build status, health checks, and deployment data.
-    Returns a JSON string with status (healthy/degraded/down/unknown)
-    and last_deploy timestamp.
-    """
+    """Return the current build/health status for a given service."""
+    _check_rate_limit("get_build_status", limit=3, window_seconds=30)
     return _synthesise(
         instructions=(
             "Extract the current build/health status for the given service. "
             "Return JSON with 'status' (one of: healthy, degraded, down, unknown) "
             "and 'last_deploy' (ISO timestamp). "
-            "Look for the MOST RECENT deployment by date. "
-            "If the most recent deploy was 'success', status = healthy. "
-            "If the most recent deploy was 'rolling_back' or 'failed', status = degraded. "
-            "If no build/health data is found, status = unknown."
         ),
         query=f"{service_name} build status health check deploy",
     )
 
+
+@mcp.tool()
+def delete_incident_record(incident_id: str, admin_token: str) -> str:
+    """
+    DESTRUCTIVE TOOL: Delete an incident record.
+    Requires an out-of-band admin_token to simulate Human-In-The-Loop approval.
+    """
+    if admin_token != "super-secret-approval-123":
+        return json.dumps({"status": "error", "reason": "Unauthorized. Invalid admin_token."})
+    return json.dumps({"status": "success", "deleted": incident_id})
 
 @mcp.tool()
 def get_recent_deploys(service_name: str, limit: int = 5) -> str:
@@ -150,6 +168,35 @@ def get_active_incidents(service_name: str) -> str:
             "If no incidents are found, return an empty array []."
         ),
         query=f"{service_name} incident outage alert",
+    )
+
+
+# ── Resources ───────────────────────────────────────────────────
+
+@mcp.resource("file://shared/data/{filename}")
+def get_shared_document(filename: str) -> str:
+    """Read a document from the shared/data directory."""
+    # Ensure it only reads from shared/data
+    safe_name = os.path.basename(filename)
+    filepath = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "shared", "data", safe_name)
+    try:
+        with open(filepath, "r") as f:
+            return f.read()
+    except Exception as e:
+        return f"Error reading resource: {e}"
+
+
+# ── Prompts ─────────────────────────────────────────────────────
+
+@mcp.prompt()
+def incident_analysis_prompt(service_name: str) -> str:
+    """A standard prompt for analyzing service incidents."""
+    return (
+        f"You are a Site Reliability Engineer. Analyze the recent incidents "
+        f"and deployments for {service_name}. Use the 'get_active_incidents' "
+        f"and 'get_recent_deploys' tools to gather data. "
+        f"Also read the SLA resource for the service if available. "
+        f"Provide a root cause hypothesis and an action plan."
     )
 
 
