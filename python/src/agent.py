@@ -8,10 +8,10 @@ A state-machine agent composed from the modules built in Weeks 1-5:
         AgentAnswer, BuildStatus, DeployRecord, Incident,
         ReadinessVerdict, EvidenceChunk,
     )
-    from src.rag import retrieve                # Week 3 — retrieval
-    call_tool(...)                              # THE SEAM: Week 4 execution
-                                                # semantics over the Week 5
-                                                # MCP server (or local W4 tools)
+    from src.rag import retrieve                # Week 3 — local retrieval backend
+    call_tool(...)    # THE SEAM — tools     (W4 execution semantics over the
+    read_resource(...) #                      W5 server, or in-process W4 tools)
+    get_prompt(...)   #                      — W5 prompts, with local fallback
 
 State is explicit and typed:
   - every data field is a contract (or None — "not checked yet"),
@@ -58,6 +58,22 @@ from src.rag import retrieve
 MCP_URL = "http://127.0.0.1:8000/sse"
 TOOL_MAX_RETRIES = 2
 
+SHARED_DATA_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "..", "shared", "data")
+
+# Service → shared document (a W5 Resource the agent grounds with).
+SERVICE_RESOURCES = {
+    "auth-service": "auth-service-spec.md",
+    "payment-api": "payment-api-spec.md",
+    "inventory-service": "inventory-service-sla.md",
+}
+
+
+def _backend() -> str:
+    """mcp (default) | local — one config flip, same code."""
+    return os.environ.get("TOOL_BACKEND", "mcp").strip().lower()
+
 
 class ToolFailure(Exception):
     """All retries exhausted. Carries context for the audit trail."""
@@ -78,7 +94,12 @@ def _transport_mcp(name: str, args: dict) -> str:
 
 def _transport_local(name: str, args: dict) -> str:
     """Week 4 backend: in-process tools through execute_tool_safely's
-    registry + structured-failure contract (retries live at the seam)."""
+    registry + structured-failure contract (retries live at the seam).
+    search_docs maps to Week 3 retrieval directly — same contract,
+    different wiring, zero protocol overhead."""
+    if name == "search_docs":
+        chunks = retrieve(args.get("query", ""), k=int(args.get("k", 3)))
+        return json.dumps(chunks)
     from src.tools import execute_tool_safely  # Week 4 — imported, not copied
     raw = execute_tool_safely({"name": name, "args": args}, max_retries=0)
     data = json.loads(raw)
@@ -114,7 +135,7 @@ def call_tool(name: str, args: dict, contract=None, many: bool = False,
     Raises:
         ToolFailure: after max_retries+1 attempts — structured, never a crash.
     """
-    backend = os.environ.get("TOOL_BACKEND", "mcp").strip().lower()
+    backend = _backend()
     transport = _transport_local if backend == "local" else _transport_mcp
 
     last = None
@@ -141,6 +162,61 @@ def call_tool(name: str, args: dict, contract=None, many: bool = False,
         f"{name}: failed after {max_retries + 1} attempt(s) — "
         f"{type(last).__name__}: {last}"
     )
+
+
+def read_resource(filename: str) -> str:
+    """THE SEAM for W5 Resources: filesystem (local) or protocol (mcp)."""
+    safe = os.path.basename(filename)
+    if _backend() == "local":
+        try:
+            with open(os.path.join(SHARED_DATA_DIR, safe)) as f:
+                return f.read()
+        except OSError as e:
+            raise ToolFailure(f"resource {safe}: {e}")
+
+    uri = f"file://shared/data/{safe}"
+
+    async def _call():
+        from mcp.client.sse import sse_client
+        from mcp import ClientSession
+        async with sse_client(MCP_URL) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.read_resource(uri)
+                content = result.contents[0]
+                return content.text if hasattr(content, "text") else str(content)
+
+    try:
+        return asyncio.run(_call())
+    except Exception as e:
+        raise ToolFailure(f"resource {safe}: {e}")
+
+
+def get_prompt(name: str, arguments: dict) -> str | None:
+    """THE SEAM for W5 Prompts. Returns the server's prompt text, or None
+    when the backend has no prompt catalogue (local) — callers fall back
+    to their own system prompt. Prompts are workflows-as-protocol."""
+    if _backend() == "local":
+        return None
+
+    async def _call():
+        from mcp.client.sse import sse_client
+        from mcp import ClientSession
+        async with sse_client(MCP_URL) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.get_prompt(name, arguments)
+                content = result.messages[0].content
+                if hasattr(content, "text"):
+                    return content.text
+                if isinstance(content, dict):
+                    return content.get("text", "")
+                return str(content)
+
+    try:
+        return asyncio.run(_call())
+    except Exception as e:
+        raise ToolFailure(f"prompt {name}: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -256,16 +332,36 @@ def extract_service(state: AgentState) -> AgentState:
 
 
 def retrieve_context(state: AgentState) -> AgentState:
-    """Retrieve relevant documents from the RAG index (Week 3)."""
+    """Ground the query through the seam:
+
+    1. search_docs — retrieval as a tool (mcp: server's W3 index over the
+       protocol; local: rag.retrieve in-process — same contract either way),
+    2. the service's shared Resource (W5 primitive) — specs/SLA enrich the
+       context. Resource failure is recorded but never fatal: docs are
+       enrichment, tools are the data path.
+    """
     try:
-        chunks = retrieve(state["query"], k=3)
-        state["context"] = "\n\n---\n\n".join(chunks) if chunks else "(no relevant documents found)"
+        raw = call_tool("search_docs", {"query": state["query"], "k": 3})
+        chunks = json.loads(raw)
+        if not isinstance(chunks, list):
+            raise ToolFailure(f"search_docs: expected an array, got {raw[:120]}")
+        state["context"] = ("\n\n---\n\n".join(chunks)
+                            if chunks else "(no relevant documents found)")
         _record(state, "retrieve_context", chunks=len(chunks))
     except Exception as e:
-        # Retrieval failed → context stays empty AND the failure is visible.
         state["context"] = ""
-        state["error"] = f"retrieve_context: {e}"
-        _record(state, "retrieve_context", status="failed", error=str(e))
+        _tool_failure(state, "retrieve_context", e)
+    else:
+        filename = SERVICE_RESOURCES.get(state.get("service_name", "").strip())
+        if filename:
+            try:
+                doc = read_resource(filename)
+                state["context"] = (
+                    f"SERVICE DOCUMENT ({filename}):\n{doc}\n\n{state['context']}")
+                _record(state, "retrieve_context", resource=filename)
+            except Exception as e:
+                _record(state, "retrieve_context", resource=filename,
+                        status="failed", error=str(e))
     state["steps"] += 1
     return state
 
@@ -362,6 +458,8 @@ def generate_report(state: AgentState) -> AgentState:
         "You are a site reliability engineer. Answer the user's query using ONLY "
         "the data provided below. Rules:\n"
         "- If a section says NOT CHECKED, say so plainly — never invent data for it.\n"
+        "- If build status is 'degraded' or 'down', verdict.ready must be False "
+        "and blockers must say why.\n"
         "- Set a verdict (ready/blockers/next steps) for readiness or health queries; "
         "leave verdict null for docs or general questions.\n"
         "- verdict.confidence must be 'low' unless evidence supports it.\n"
@@ -370,6 +468,20 @@ def generate_report(state: AgentState) -> AgentState:
         "- ready=True with blockers, or ready=False with no blockers, will be "
         "REJECTED by the contract validator — be consistent."
     )
+
+    # W5 Prompt primitive: incident queries adopt the server's standard
+    # workflow (prompt-as-protocol), with our grounding rules appended.
+    # Local backend has no prompt catalogue → falls back to the default.
+    if "incidents" in classify_query(state["query"]).split("+"):
+        try:
+            workflow = get_prompt("incident_analysis_prompt",
+                                  {"service_name": state["service_name"] or "unknown-service"})
+            if workflow:
+                system = f"{workflow}\n\nGrounding rules:\n{system}"
+                _record(state, "generate_report", prompt="incident_analysis_prompt")
+        except Exception as e:
+            _record(state, "generate_report", prompt="incident_analysis_prompt",
+                    status="failed", error=str(e))
 
     last_exc = None
     answer = None
@@ -525,6 +637,7 @@ REQUIREMENTS = {
     "incidents": ["incidents"],
     "docs": ["context"],
     "general": [],
+    "action": [],   # imperative — refused before validate ever runs
 }
 
 # Imperative operational actions — refused deterministically, before any
@@ -536,23 +649,34 @@ IMPERATIVE_ACTIONS = re.compile(
 
 
 def classify_query(query: str) -> str:
-    """Deterministic query category — code, not prompt. Order matters."""
+    """Deterministic query categories — code, not prompt.
+
+    Returns ALL matched categories joined with '+' (a query asking about
+    deployments AND incidents gets both): the planner's allowed steps and
+    the guard's requirements are the UNION of every matched category, so
+    a multi-intent query never has a legitimate step rejected as
+    out-of-scope. Order of matching = priority for the primary label.
+    """
     q = query.lower()
     if IMPERATIVE_ACTIONS.match(q):
         return "action"
     if any(w in q for w in ("full", "everything", "all checks", "end-to-end")):
         return "full"
+    cats: list[str] = []
     if any(w in q for w in ("ready", "readiness", "release", "assessment", "ship")):
-        return "readiness"
+        cats.append("readiness")
     if any(w in q for w in ("incident", "outage", "alert")):
-        return "incidents"
+        cats.append("incidents")
     if any(w in q for w in ("deployed", "deployment", "sha", "version")):
-        return "deploys"
+        cats.append("deploys")
     if any(w in q for w in ("healthy", "health", "status", "build")):
-        return "health"
-    if any(w in q for w in ("doc", "spec", "api", "endpoint", "sla", "how", "what is", "why")):
-        return "docs"
-    return "general"
+        cats.append("health")
+    # NOTE: no bare "api" — service names like "payment-api" would match
+    # every query and silently force the docs category on all of them.
+    if any(w in q for w in ("doc", "spec", "endpoint", "sla", "how",
+                            "what is", "why", "describe", "explain")):
+        cats.append("docs")
+    return "+".join(cats) if cats else "general"
 
 
 def _router_catalog() -> str:
@@ -570,6 +694,7 @@ PLAN_ROUTE_MAP = {
     **{name: name for name in NODE_REGISTRY},
     "report": "validate",
     "done": "validate",
+    "validate": "validate",   # plan fallback: hand a stuck run to the guard
     "refuse": "refuse",
     "stop": END,
 }
@@ -649,12 +774,17 @@ def budget_guard(state: AgentState) -> bool:
     return state["steps"] >= MAX_STEPS or state["cost"] >= MAX_COST
 
 
-def _required_missing(state: AgentState, category: str) -> list[str]:
-    """Fields this query needs that are not present. Shared by plan()
-    (fallback decisions) and validate() (the guard itself) — one
+def _required_missing(state: AgentState, categories: list[str]) -> list[str]:
+    """Fields these query categories need that are not present. Shared by
+    plan() (fallback decisions) and validate() (the guard itself) — one
     definition of 'enough data for this query'."""
+    needed: list[str] = []
+    for category in categories:
+        for field in REQUIREMENTS[category]:
+            if field not in needed:
+                needed.append(field)
     missing = []
-    for field in REQUIREMENTS[category]:
+    for field in needed:
         value = state.get(field)
         if value is None or (field == "context" and not value):
             missing.append(field)
@@ -702,8 +832,8 @@ def plan(state: AgentState) -> AgentState:
         return state
 
     # Structural scope: which steps are worth proposing for THIS query?
-    category = classify_query(state["query"])
-    allowed = {FIELD_TO_STEP[f] for f in REQUIREMENTS[category]} | {"retrieve"}
+    categories = classify_query(state["query"]).split("+")
+    allowed = {FIELD_TO_STEP[f] for c in categories for f in REQUIREMENTS[c]} | {"retrieve"}
 
     proposal = router(state)
     known = set(NODE_REGISTRY) | {"report", "done"}
@@ -730,7 +860,7 @@ def plan(state: AgentState) -> AgentState:
             proposal = retry
             decision = "corrected"
         else:
-            proposal = "report" if not _required_missing(state, category) else "validate"
+            proposal = "report" if not _required_missing(state, categories) else "validate"
             decision = "fallback"
         state["next_step"] = proposal
         _record(state, "plan", proposal=proposal, decision=decision)
@@ -766,11 +896,12 @@ def validate(state: AgentState) -> AgentState:
     facts (failing build). On failure it writes the blocked report
     itself — ready=False, typed, with reasons — and sets error.
     """
-    category = classify_query(state["query"])
+    category = classify_query(state["query"])          # label, e.g. "incidents+deploys"
+    categories = category.split("+")
     reasons: list[str] = []
     next_steps: list[str] = []
 
-    for field in _required_missing(state, category):
+    for field in _required_missing(state, categories):
         step = FIELD_TO_STEP.get(field, field)
         reasons.append(
             f"REQUIRED DATA MISSING: '{field}' was never collected "

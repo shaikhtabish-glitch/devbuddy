@@ -245,6 +245,16 @@ mvn test -Dtest=McpServerTest
 > on the MCP Java SDK directly and run the WebFlux SSE transport on an embedded
 > reactor-netty server — no Boot, no servlet container.
 
+## Week 6 scope (explicit)
+
+The Java port **stops at Week 5**. Week 6 (agentic workflows) is taught from the
+Python reference implementation — typed `AgentState`, the `call_tool` seam with
+its `mcp`/`local` backends, and the three guards (budget / structural / business)
+live in `python/src/agent.py`, with Node.js demos mirroring the flow. Porting the
+agent to Java is deliberately out of scope: the lesson is the architecture and the
+state-machine discipline, which transfers across languages — see `docs/week-06.md`
+→ *Scope: languages*.
+
 ## Each Week
 
 ```bash

@@ -92,6 +92,22 @@ def _synthesise(instructions: str, query: str, k: int = 5) -> str:
 # ── Tools ─────────────────────────────────────────────────────
 _rate_limits = {"get_build_status": {"count": 0, "window_start": time.time()}}
 
+@mcp.tool()
+def search_docs(query: str, k: int = 5) -> str:
+    """
+    Search the shared documentation index (Week 3 RAG).
+    Returns a JSON array of the top-k matching document chunks (strings).
+
+    Retrieval as a protocol capability — the same retrieve() the local
+    backend uses, exposed so any MCP client can ground its answers.
+    """
+    try:
+        chunks = retrieve(query, k=k)
+        return json.dumps(chunks)
+    except Exception as e:
+        return json.dumps({"status": "unknown",
+                           "reason": f"retrieval error: {type(e).__name__} — {e}"})
+
 def _check_rate_limit(tool_name: str, limit: int = 3, window_seconds: int = 10):
     """Real rate limiting implementation."""
     now = time.time()

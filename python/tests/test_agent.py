@@ -24,7 +24,7 @@ from src.agent import (
     build_missing_step_agent,
     run_fixed_chain, run_dynamic_agent, run_guarded_chain,
     run_missing_step_agent, _init_state,
-    call_tool, ToolFailure,
+    call_tool, ToolFailure, read_resource, get_prompt,
     MAX_STEPS, MAX_COST,
 )
 
@@ -153,6 +153,7 @@ def _index_ready():
     index_documents(chunk_size=512)
 
 
+@needs_mcp
 def test_retrieve_context_populates(_index_ready):
     state = _init_context_state()
     state = retrieve_context(state)
@@ -283,6 +284,66 @@ def test_fixed_chain_runs_local_backend(_index_ready, monkeypatch):
     assert result["steps"] == 4
 
 
+# ── Week 5's three primitives, both backends ────────────────────
+
+def test_seam_search_docs_local_backend(monkeypatch):
+    """Retrieval as a tool: local backend maps search_docs → rag."""
+    import json as _json
+    monkeypatch.setenv("TOOL_BACKEND", "local")
+    chunks = _json.loads(call_tool("search_docs",
+                                   {"query": "payment api endpoints", "k": 3}))
+    assert isinstance(chunks, list) and chunks
+    assert isinstance(chunks[0], str)
+
+
+@needs_mcp
+def test_seam_search_docs_mcp_backend():
+    """Same contract over the protocol — the W3 index served by W5."""
+    import json as _json
+    chunks = _json.loads(call_tool("search_docs",
+                                   {"query": "payment api endpoints", "k": 3}))
+    assert isinstance(chunks, list) and chunks
+
+
+def test_seam_read_resource_local_backend(monkeypatch):
+    monkeypatch.setenv("TOOL_BACKEND", "local")
+    doc = read_resource("auth-service-spec.md")
+    assert len(doc) > 100
+
+
+@needs_mcp
+def test_seam_read_resource_mcp_backend():
+    """The SAME file, fetched through the MCP resource protocol."""
+    doc = read_resource("auth-service-spec.md")
+    assert len(doc) > 100
+
+
+def test_seam_get_prompt_local_returns_none(monkeypatch):
+    """Local backend has no prompt catalogue → caller falls back."""
+    monkeypatch.setenv("TOOL_BACKEND", "local")
+    assert get_prompt("incident_analysis_prompt",
+                      {"service_name": "payment-api"}) is None
+
+
+@needs_mcp
+def test_seam_get_prompt_mcp_backend():
+    text = get_prompt("incident_analysis_prompt",
+                      {"service_name": "payment-api"})
+    assert text and "incident" in text.lower()
+
+
+@needs_mcp
+def test_retrieve_context_enriches_with_resource(_index_ready):
+    """The agent grounds with the service's Resource — recorded in the
+    audit trail, appended to context."""
+    state = _init_service_state("What does the payment-api spec cover?")
+    state = retrieve_context(state)
+    assert state["error"] == "", state["error"]
+    assert "SERVICE DOCUMENT" in state["context"]
+    assert any(m.get("resource") == "payment-api-spec.md"
+               for m in state["messages"])
+
+
 # ═══════════════════════════════════════════════════════════════
 # Registry + classification — the structural layer (pure, no LLM)
 # ═══════════════════════════════════════════════════════════════
@@ -296,6 +357,10 @@ def test_classify_query_categories():
     assert classify_query("Deploy auth-service to production") == "action"
     assert classify_query("Give me a full readiness assessment") == "full"
     assert classify_query("hello") == "general"
+    # multi-intent: BOTH categories match → union of steps and requirements
+    assert classify_query(
+        "What was deployed recently for payment-api and are there any incidents?"
+    ) == "incidents+deploys"
 
 
 def test_registry_drives_router_catalog_and_route_map():
@@ -305,10 +370,12 @@ def test_registry_drives_router_catalog_and_route_map():
     catalog = _router_catalog()
     for name in NODE_REGISTRY:
         assert f"- {name}:" in catalog
-    # every registry step is routable, plus report/done/refuse/stop
-    assert set(PLAN_ROUTE_MAP) == set(NODE_REGISTRY) | {"report", "refuse", "done", "stop"}
+    # every registry step is routable, plus report/done/validate/refuse/stop
+    assert set(PLAN_ROUTE_MAP) == set(NODE_REGISTRY) | {
+        "report", "done", "validate", "refuse", "stop"}
     assert PLAN_ROUTE_MAP["report"] == "validate"
     assert PLAN_ROUTE_MAP["done"] == "validate"  # "wrap up" → guard decides
+    assert PLAN_ROUTE_MAP["validate"] == "validate"
     # every requirement names a real state field with a real step
     for fields in REQUIREMENTS.values():
         for field in fields:
@@ -463,8 +530,14 @@ def test_fixed_chain_runs(_index_ready):
         "fixed chain = extract + retrieve + check_build + report"
     assert result["cost"] > 0
     assert result["error"] == ""
-    # audit trail tells the story — nothing reconstructed
-    assert [m["step"] for m in result["messages"]] == [
+    # audit trail tells the story — nothing reconstructed.
+    # (resource enrichment adds a second retrieve_context event →
+    #  collapse consecutive repeats before comparing the path)
+    path = []
+    for step in (m["step"] for m in result["messages"]):
+        if not path or path[-1] != step:
+            path.append(step)
+    assert path == [
         "extract_service", "retrieve_context", "check_build", "generate_report",
     ]
 

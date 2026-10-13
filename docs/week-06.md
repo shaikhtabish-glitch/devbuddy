@@ -1,224 +1,206 @@
 # Week 6 — Agentic Workflows
 
-**Goal:** Chain Weeks 2–5 into an autonomous pipeline. Retrieve context, call tools, produce structured output, decide next step — all in one flow.
+**Goal:** Compose Weeks 1–5 into an autonomous agent — and make it *know when to stop*.
+An agent is a state machine over contracts you already own: typed state, explicit
+transitions, guards that refuse to paper over missing data.
 
 ---
 
 ## Setup
 
-### Python
+### Python (reference implementation)
 
 ```bash
 cd python
 source .venv/bin/activate
-git pull upstream main
 pip install -r requirements.txt
 
-# Terminal 1: Start the MCP server
-python src/mcp_server.py
-# → http://127.0.0.1:8000/sse
-
-# Terminal 2: Qdrant must be running
+# Terminal 1: Qdrant (Week 3+)
 docker-compose up -d
 python -c "from src.rag import index_documents; index_documents()"
+
+# Terminal 2: MCP server (Week 5) — tools + resources + prompts on :8000
+python src/mcp_server.py
+# → http://127.0.0.1:8000/sse
 ```
 
 ### Node.js
 
 ```bash
 cd nodejs
-git pull upstream main
 npm install --legacy-peer-deps
 
-# Terminal 1: Start the MCP server
+# MCP server on :3001 (ports intentionally differ from Python — see Troubleshooting)
 node src/mcp_server.js
 # → http://localhost:3001/sse
-
-# Terminal 2: Qdrant must be running
-docker-compose up -d
 ```
 
-Verify you're ready:
-
-**Python:**
+### Verify you're ready
 
 ```bash
 python -m pytest tests/test_agent.py -v
 ```
 
-**Node.js:**
-
-```bash
-node scripts/week-06/demo-01-fixed-chain.js
-```
-```
+Unit tests (state, guards, registry, refusal) run anywhere. Integration tests are
+marked `skipif` — they tell you exactly which service they couldn't reach instead
+of erroring. All green with services up = fully verified.
 
 ---
 
 ## What You Have
 
-Open `src/agent.py`. It's already fully built — 6 nodes, a dynamic router with
-anti-cascade logic, cost tracking, a step/cost guard, and both fixed-chain and
-dynamic agent builders. It composes everything from Weeks 2–5:
+Open `src/agent.py`. The composition is real — and checkable:
 
 ```
 agent.py
-├── from src.llm import get_llm          # Week 1
-├── SSE client → mcp_server.py           # Week 5 — ALL data via MCP
-│   ├── search_docs(query, k)            #   retrieval (Week 3)
-│   ├── get_build_status(service_name)   #   tools (Week 4)
-│   ├── get_recent_deploys(...)          #
-│   └── get_active_incidents(...)        #
-└── LangGraph StateGraph                 # orchestrator
+├── from src.llm import get_llm                 # Week 1 — provider
+├── from src.schemas import AgentAnswer, …      # Week 2 — contracts; THEIR
+│                                                #   validators run on the
+│                                                #   agent's own output
+├── from src.rag import retrieve                # Week 3 — local retrieval backend
+└── THE SEAM — one config flip, same code (TOOL_BACKEND=mcp | local)
+      ├── call_tool(name, args, contract=…)     # tools
+      │     ├── mcp   → Week 5 server :8000 — search_docs, get_build_status,
+      │     │           get_recent_deploys, get_active_incidents
+      │     └── local → Week 4 src.tools in-process (execute_tool_safely)
+      ├── read_resource(filename)              # Week 5 RESOURCES: file://shared/data/*
+      └── get_prompt(name, args)               # Week 5 PROMPTS: incident_analysis_prompt
 ```
 
-**Single data path.** All data access — retrieval and tools — goes through the
-MCP server over SSE (`http://127.0.0.1:8000/sse`). The agent has no direct
-dependency on `src.rag` or `src.tools`. The MCP server runs as a long-lived
-daemon (start it in another terminal: `python src/mcp_server.py`). Model
-loads once, all calls are instant.
+Everything below derives from **one dict**, `NODE_REGISTRY` — they cannot drift apart:
 
-**The import graph is now complete.** Every module built so far feeds into the agent.
+| Derived from the registry | Where it shows up |
+|---|---|
+| Router's step catalog | the prompt the model sees |
+| Graph's route map | `PLAN_ROUTE_MAP` (conditional edges) |
+| Guard's requirements | `REQUIREMENTS` per query category |
+| Refusal message | built from registry keys, never from the model |
 
-## Files You'll Touch
-- `src/agent.py` — the orchestrator (imports llm, connects to MCP over SSE)
-- `scripts/week-06/` — demo scripts
+### The three guards
+
+| Guard | Kind | Job |
+|---|---|---|
+| `budget_guard` | operational | steps/cost ceiling; on trip still emits a **typed** blocked answer without another LLM call |
+| `plan` | structural | LLM **proposes**, code **disposes**: imperative actions refused before any LLM call, unknown capabilities refused via the registry, repeats corrected once then handed to the guard |
+| `validate` | business | required state (derived from the query category) must be present — and the build must not be `down` — **before** `generate_report`; writes the blocked report itself, deterministically |
+
+### The checkpoints
+
+| CP | Concept | Demo | What you'll see |
+|----|---------|------|-----------------|
+| **C1** | Fixed chain | `demo-01` | 4 steps, typed state flowing, structured report + recorded audit trail |
+| **C2** | Missing-step hallucination | `demo-04` | node removed → naive report invents build data from `BUILD: {}` — then the same hole with the guard attached |
+| **C3** | Guard + conditional edge | `demo-05` | guard passes with data, **stops** without it, and refuses `Deploy …` from the registry |
+
+Plus: `demo-02` (dynamic router), `demo-03` (conversational REPL).
 
 ---
 
 ## In-Session Steps
 
-The moderator runs a demo first (fixed chain: RAG → tool → structured output). Watch, then follow these steps.
-
-> ⚠️ This is the most complex hands-on so far. Pair up if stuck. The agent WILL break — that's the point.
-
----
-
-### Step 1: Study and run the fixed chain (15 min)
-
-`src/agent.py` is already built. Open it and study the architecture:
-
-- **State:** `AgentState` carries query, service_name, context, build_status, deploys, incidents, report, steps, cost
-- **Nodes:** `extract_service` → `retrieve_context` → `check_build` → `check_deploys` → `check_incidents` → `generate_report`
-- **Tools** are called via MCP (`_call_mcp_tool()`) — connects to the Week 5 server over SSE
-- **Fixed chain:** `build_fixed_chain()` — 4 steps, always the same path
-- **Dynamic agent:** `build_dynamic_agent()` — model decides steps at runtime
-
-Run the fixed chain:
+### Step 1: C1 — study and run the fixed chain (15 min)
 
 ```bash
-# Python
-python scripts/week-06/demo-01-fixed-chain.py
-python scripts/week-06/demo-02-dynamic-routing.py
-python scripts/week-06/demo-03-conversational-agent.py
-
-# Node.js
-node scripts/week-06/demo-01-fixed-chain.js
-node scripts/week-06/demo-02-dynamic-routing.js
-node scripts/week-06/demo-03-conversational-agent.js
+python scripts/week-06/demo-01-fixed-chain.py   # and: node scripts/week-06/demo-01-fixed-chain.js
 ```
 
-The chain: extract service → retrieve → check build → report. 4 steps every time.
-Notice: it checks the RIGHT service (extracted from the query), but the path is rigid.
-If you added a `check_deploys` node, the fixed chain couldn't use it.
+Watch the audit trail: every node records itself (`extract_service → retrieve_context
+→ check_build → generate_report`), the report is an `AgentAnswer` (Week 2 contract),
+and `steps == 4` — the tests assert exactly that. The path is *recorded*, never
+reconstructed from state.
 
----
-
-### Step 2: Run the dynamic agent (10 min)
+### Step 2: dynamic routing (10 min)
 
 ```bash
 python scripts/week-06/demo-02-dynamic-routing.py
 ```
 
-The dynamic agent adapts to each query:
-- *"Is payment-api healthy?"* → retrieve + check_build + report (3 steps)
-- *"What was deployed and any incidents?"* → retrieve + check_deploys + check_incidents + report (4 steps)
-- *"Full readiness assessment"* → all 4 data steps + report (5 steps)
+The planner node proposes, the registry disposes. Note what's structural vs prompt:
+the router *suggests* `check_incidents` for a health query sometimes — the scope
+check (`allowed` steps for the query category) rejects it, the correction loop runs
+once, and the guard resolves the fallback. Anti-cascade is a **contract**, not a
+hope.
 
-**Key insight:** The router only runs steps the query explicitly asks for. It won't
-cascade — "healthy?" doesn't trigger "also check incidents." This keeps costs
-proportional to the query complexity.
-
----
-
-### Step 3: Break it — test the guard (5 min)
-
-Open `src/agent.py`. Find the guard function:
-
-```python
-MAX_STEPS = 10
-MAX_COST = 2.00
-```
-
-Change `MAX_STEPS` to `2`. Run a query that needs 3+ steps:
-
-```python
-from src.agent import run_dynamic_agent
-result = run_dynamic_agent("Give me a full readiness assessment for payment-api")
-print(result["steps"])  # → 2 (stopped by guard)
-```
-
-The agent stops before completing. **Guards prevent runaway agents** — essential
-for production where every step costs money.
-
-Change `MAX_STEPS` back to `10` when done.
-
----
-
-### Step 4: Extend — add a new tool (optional, 10 min)
-
-Add a new tool to `src/mcp_server.py` (like `get_service_owner`), then add a
-corresponding node in `agent.py`. Add the node to `build_dynamic_agent()` and
-the router's decision list. Restart and test — the agent now has a new capability.
-
----
-
-### Step 5: Explore (remaining time)
+### Step 3: C2 — remove a step, watch it hallucinate (12 min)
 
 ```bash
-# Study the agent implementation
-cat src/agent.py
-
-# Run the demos
-python scripts/week-06/demo-01-fixed-chain.py      # fixed vs broken
-python scripts/week-06/demo-02-dynamic-routing.py   # dynamic adaptation
-python scripts/week-06/demo-03-conversational-agent.py  # talk to DevBuddy
+python scripts/week-06/demo-04-missing-step.py
 ```
+
+`check_build` is gone. `state['build_status']` is `None`. The naive report node
+renders `BUILD: {}` and the model completes the report anyway — because it predicts
+tokens, it doesn't reason about missing data. Same mechanism as Week 4's tool-error
+hallucination. The demo then attaches the guard to the *same* broken graph and shows
+the typed blocked answer instead.
+
+### Step 4: C3 — guards and refusal (15 min)
+
+```bash
+python scripts/week-06/demo-05-guard-and-refusal.py
+```
+
+Three tests: guard passes → report; guard blocks → typed `ready=False` answer
+(written by code, zero LLM spend); `Deploy auth-service to production` → refused
+before any LLM routing call, message built from the registry.
+
+**Break it:** in `src/agent.py` set `MAX_STEPS = 2`, run a full-assessment query,
+watch `budget_guard` stop the run with a typed answer. Set it back to `10`.
+
+**Extend:** add `get_service_owner` to `src/mcp_server.py`, then add one entry to
+`NODE_REGISTRY` — the router catalog, the route map, and the guard requirements all
+pick it up automatically. Restart the server, run demo-02. One dict, four surfaces.
 
 ---
 
 ## Acceptance Criteria
-- [ ] Fixed chain (extract → retrieve → build → report) runs end-to-end via demo-01
-- [ ] Dynamic agent adapts to 3 different queries with different step counts via demo-02
-- [ ] Guard stops the agent when `MAX_STEPS` is lowered to 2
-- [ ] You can trace cost per step and total cost for a query
-- [ ] You can explain: *"Fixed chains are predictable but brittle. Dynamic routing adapts but costs more."*
+
+- [ ] C1: fixed chain runs end-to-end; audit trail shows 4 recorded steps; report is an `AgentAnswer`
+- [ ] C2: you saw the naive report invent build data from empty state (`demo-04`)
+- [ ] C3: guard blocks the missing-step graph with a typed answer; passes with data
+- [ ] Refusal: `Deploy auth-service to production` is refused, listing only registry entries
+- [ ] You can trace steps + cost per run, and explain where the cost comes from
+- [ ] You can flip `TOOL_BACKEND=local` and run the same agent without the MCP server
+- [ ] You can explain: *in-graph guards see state; Week 7 guardrails see only I/O*
 
 ---
 
 ## Self-Learning (Before Week 7)
 
-> **The take-home is dynamic routing + state management.** Fixed chains work. Dynamic routing adapts. Both have tradeoffs.
+### Part A: fixed vs dynamic, cost
+Run 5 queries through `run_fixed_chain` and `run_dynamic_agent`. Compare steps, LLM
+calls, total cost. When is fixed better? When is dynamic worth the planning overhead?
 
-### Part A: Build both, compare cost
-- Build a fixed 3-step chain and a dynamic router for the same task
-- Run 5 different queries through both
-- Compare: steps taken, LLM calls made, total cost
-- Which approach wins for each query type? When is fixed better? When is dynamic worth the extra cost?
+### Part B: coherence audit — THREE cases
+For each: what was asked → what the agent planned (from `messages`) → what it
+actually did → where it went wrong → what state was lost or hallucinated → what
+would fix it. Use demo-03's REPL. Include one refusal and one guard-blocked run.
 
-### Part B: Coherence stress test
-- Run a complex query that requires 4+ steps
-- Document: did the agent repeat itself? Forget context? Pursue an irrelevant path?
-- What state management strategy would fix it? (Truncation? Summarisation? Different state format?)
+### Part C: orchestrator design
+Sketch orchestrator + sub-agent for "PR review → check affected services →
+deployment risk report". Which parts are nodes, which are tools, where does a
+human approve?
 
-### Part C: Design an orchestrator
-- Sketch an orchestrator + sub-agent architecture for a real workflow:
-  - "PR review → check affected services → generate deployment risk report"
-- Which steps are sub-agents? Which are tools? Where does the human approve?
+### Part D: deep question
+> You built guards *inside* the agent graph (Week 6). Week 7 adds `src/guardrails.py`
+> wrapped *around* the agent. What's the difference? When would you use each?
 
-### Part D: Capstone preview
-- Read `detailed-plan/capstone/README.md` — this is what you'll build between now and the presentation
-- Which components from Weeks 2–6 will you integrate? What's your architecture?
+(Hint: in-graph guards read full typed state — business logic. External guardrails
+see only input/output — security, cost, policy. Same word, different surface.)
+
+### ADR exercise (Runbook contribution)
+Write a 1-paragraph ADR: *"We route retrieval through the MCP server / keep it as a
+local import, because…"* — defend the process-boundary decision. The code supports
+both (`TOOL_BACKEND`); the tradeoff is yours to state.
+
+---
+
+## Scope: languages
+
+- **Python** — reference implementation (typed state, seam, three guards, all demos).
+- **Node.js** — runs the same demo flow (`scripts/week-06/`) against its own server
+  with the original string-typed agent; structural parity with the Python design is
+  tracked, not claimed.
+- **Java** — port stops at Week 5 (see `java/README.md`). Week 6 is not ported.
 
 ---
 
@@ -226,16 +208,19 @@ python scripts/week-06/demo-03-conversational-agent.py  # talk to DevBuddy
 
 | Problem | Fix |
 |---------|-----|
-| `ImportError: langgraph` (Python) | `pip install langgraph` |
-| `ERR_MODULE_NOT_FOUND: @langchain/langgraph` (Node.js) | `npm install --legacy-peer-deps` from `nodejs/` |
-| Agent loops infinitely | The guard is already there — `MAX_STEPS=10`, `MAX_COST=$2.00` |
-| Router always picks the same step | Improve the routing prompt. Make decision criteria explicit. |
-| MCP tool call fails | Ensure MCP server is running and Qdrant is up |
-| MCP connection refused (Node.js) | Check port 3001 is correct: `node src/mcp_server.js` |
-| State not carrying between steps | Check that each node returns the state dict |
+| `ToolFailure: get_build_status …` | MCP server down → `python src/mcp_server.py` (port 8000) |
+| Qdrant connection refused | `docker-compose up -d` |
+| Retrieval empty / "No index found" | `python -c "from src.rag import index_documents; index_documents()"` (retrieve also lazy-connects to an existing collection) |
+| Integration tests skipped | That's the skipif markers working — start Qdrant + MCP server and re-run |
+| Node MCP connection refused | Node server is port **3001** (`node src/mcp_server.js`) |
+| Guard blocks a query you think should run | Check `REQUIREMENTS[classify_query(query)]` — the guard only demands what the category requires |
+| Router proposes a weird step | Watch `messages` — `plan` records proposal, decision, and reason; the registry check is auditable |
+| Empty model completions | The loops retry once with a nudge (`_final_answer`); if it persists, provider-side issue |
 
 ---
 
 ## Runbook Contribution
 
-Write a 1-paragraph ADR: "We chose [fixed-chain / dynamic-routing] for our agent because…"
+Write 1 paragraph: *"Our agent's guards are X because Y"* — cover at least two of
+the three guard kinds (budget / structural / business) and one thing you'd add in
+Week 7.
