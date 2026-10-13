@@ -21,7 +21,9 @@ from src.agent import (
     budget_guard, plan, validate, route_after_validate, refuse,
     classify_query, NODE_REGISTRY, PLAN_ROUTE_MAP, REQUIREMENTS,
     build_fixed_chain, build_dynamic_agent, build_guarded_chain,
-    run_fixed_chain, run_dynamic_agent, run_guarded_chain, _init_state,
+    build_missing_step_agent,
+    run_fixed_chain, run_dynamic_agent, run_guarded_chain,
+    run_missing_step_agent, _init_state,
     call_tool, ToolFailure,
     MAX_STEPS, MAX_COST,
 )
@@ -391,6 +393,32 @@ def test_refusal_message_is_built_from_registry():
 def test_guarded_chain_compiles_both_variants():
     assert build_guarded_chain() is not None
     assert build_guarded_chain(include_build=False) is not None
+
+
+def test_c2_naive_section_renders_empty_braces():
+    """The C2 vulnerability in one line: naive renders '{}', defended
+    renders 'NOT CHECKED'. Same state, two prompts."""
+    from src.agent import _naive_section, _data_section
+    assert _naive_section("Build status", None) == "Build status: {}"
+    assert "NOT CHECKED" in _data_section("Build status", None)
+
+
+def test_missing_step_graph_compiles():
+    assert build_missing_step_agent() is not None
+
+
+@needs_mcp
+def test_missing_step_report_bypasses_guard(_index_ready):
+    """C2 structural fact: with check_build removed and NO validate node,
+    a report is still produced from state where build_status is None —
+    the exact hole the C3 guard closes (see guarded-chain block test)."""
+    result = run_missing_step_agent("Is payment-api ready for release?")
+    assert result["build_status"] is None
+    assert isinstance(result["report"], AgentAnswer)
+    assert result["report"].answer
+    # no guard ran anywhere in this graph
+    assert not any(m["step"] == "validate" for m in result["messages"])
+    assert any(m["step"] == "generate_report_naive" for m in result["messages"])
 
 
 def test_refusal_end_to_end():

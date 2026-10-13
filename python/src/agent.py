@@ -241,7 +241,14 @@ def extract_service(state: AgentState) -> AgentState:
         )),
         HumanMessage(content=state["query"]),
     ])
-    state["service_name"] = response.content.strip().lower()
+    name = response.content.strip().lower()
+    if not name:
+        # empty completion (provider quirk at temp=0) — retry once
+        response = llm.invoke([
+            HumanMessage(content=f"{state['query']}\n\nService name:"),
+        ])
+        name = response.content.strip().lower() or "payment-api"
+    state["service_name"] = name
     state["steps"] += 1
     state["cost"] += _estimate_cost(response)
     _record(state, "extract_service", service=state["service_name"])
@@ -389,6 +396,66 @@ def generate_report(state: AgentState) -> AgentState:
                    "the AgentAnswer contract. See error.)",
         )
         _record(state, "generate_report", status="failed", error=str(last_exc))
+    state["steps"] += 1
+    state["cost"] += _usage_cost(capture.usage)
+    return state
+
+
+# ═══════════════════════════════════════════════════════════════
+# C2 teaching node — DELIBERATELY UNDEFENDED (demo-04 only)
+# ═══════════════════════════════════════════════════════════════
+
+def _naive_section(label: str, value) -> str:
+    """The VULNERABLE rendering: missing state becomes '{}'.
+
+    Compare with _data_section, which says NOT CHECKED. Same data,
+    two prompts — the difference is the whole C2 lesson.
+    """
+    if value is None:
+        return f"{label}: {{}}"
+    return _data_section(label, value)
+
+
+def generate_report_naive(state: AgentState) -> AgentState:
+    """C2 TEACHING NODE — do not use outside demo-04.
+
+    Renders missing state as '{}' and gives the model NO ground rules
+    ('only use provided data'). This is the pattern that makes agents
+    hallucinate missing steps: the prompt shows an empty build status
+    and asks for a complete report — the most probable next token is
+    a helpful invention.
+    """
+    llm = get_llm(temperature=0)
+    structured = llm.with_structured_output(AgentAnswer)
+    capture = _UsageCapture()
+
+    sections = "\n\n".join([
+        f"Query: {state['query']}",
+        _naive_section("Relevant documentation", state["context"] or None),
+        _naive_section("Build status", state["build_status"]),
+        _naive_section("Recent deployments", state["deploys"]),
+        _naive_section("Active incidents", state["incidents"]),
+    ])
+
+    system = (
+        "You are a site reliability engineer. Generate a complete release "
+        "readiness report based on the following data. Be specific and "
+        "decisive: state the build health, the deployment state, and whether "
+        "the service is ready to ship. Return an AgentAnswer."
+    )
+
+    try:
+        answer = structured.invoke(
+            [SystemMessage(content=system), HumanMessage(content=sections)],
+            config={"callbacks": [capture]},
+        )
+        state["report"] = answer
+        _record(state, "generate_report_naive",
+                ready=answer.verdict.ready if answer.verdict else None)
+    except Exception as e:
+        state["error"] = f"generate_report_naive: {type(e).__name__}: {e}"
+        state["report"] = AgentAnswer(answer="(naive report failed)")
+        _record(state, "generate_report_naive", status="failed", error=str(e))
     state["steps"] += 1
     state["cost"] += _usage_cost(capture.usage)
     return state
@@ -549,6 +616,15 @@ def router(state: AgentState, correction: str | None = None) -> str:
     ])
 
     decision = response.content.strip().lower()
+    if not decision:
+        # empty completion — retry once before trusting an empty proposal
+        response = llm.invoke([
+            HumanMessage(content=(
+                f"QUERY: {state['query']}\n\nAvailable steps:\n{_router_catalog()}\n\n"
+                "Next step (one word):"
+            )),
+        ])
+        decision = response.content.strip().lower()
     state["cost"] += _estimate_cost(response)
     return decision
 
@@ -847,7 +923,34 @@ def run_dynamic_agent(query: str) -> dict:
     return agent.invoke(_init_state(query))
 
 
+def build_missing_step_agent() -> StateGraph:
+    """
+    C2: the C1-style chain with check_build REMOVED and NO guard.
+
+    state['build_status'] stays None all the way into the naive report
+    node — which renders it as '{}' and lets the model fill the gap.
+    That gap-filling IS the hallucination engineers must witness.
+    """
+    graph = StateGraph(AgentState)
+    graph.add_node("extract_service", extract_service)
+    graph.add_node("retrieve", retrieve_context)
+    graph.add_node("check_deploys", check_deploys)
+    graph.add_node("report", generate_report_naive)  # naive node, no validate
+    graph.set_entry_point("extract_service")
+    graph.add_edge("extract_service", "retrieve")
+    graph.add_edge("retrieve", "check_deploys")
+    graph.add_edge("check_deploys", "report")
+    graph.add_edge("report", END)
+    return graph.compile()
+
+
 def run_guarded_chain(query: str, include_build: bool = True) -> dict:
     """Run the C3 guarded chain. include_build=False = C2's missing step."""
     agent = build_guarded_chain(include_build=include_build)
+    return agent.invoke(_init_state(query))
+
+
+def run_missing_step_agent(query: str) -> dict:
+    """Run the C2 missing-step graph (no guard, naive report)."""
+    agent = build_missing_step_agent()
     return agent.invoke(_init_state(query))
