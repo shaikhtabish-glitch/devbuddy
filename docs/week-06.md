@@ -96,11 +96,12 @@ Everything below derives from **one dict**, `NODE_REGISTRY` — they cannot drif
 
 | CP | Concept | Demo | What you'll see |
 |----|---------|------|-----------------|
-| **C1** | Fixed chain | `demo-01` | 4 steps, typed state flowing, structured report + recorded audit trail |
-| **C2** | Missing-step hallucination | `demo-04` | node removed → naive report invents build data from `BUILD: {}` — then the same hole with the guard attached |
-| **C3** | Guard + conditional edge | `demo-05` | guard passes with data, **stops** without it, and refuses `Deploy …` from the registry |
+| **C1** | Fixed chain | `demo-01` | the **compiled graph** drives the transitions (streamed, not a for-loop); after every node: its audit event + per-step cost, which state fields are **filled**, which are still empty |
+| **C2** | Missing-step hallucination | `demo-04` | node removed → naive report renders `BUILD: {}`. Detection is structural: fabricated `source="tool"` evidence, or affirmative build claims vs state (honest hedges are reported as hedges) — then the same hole with the guard attached |
+| **C3** | Guard + conditional edge | `demo-05` | four tests: guard passes → report · guard blocks (typed answer, **cost-proven zero report spend**) · `Deploy …` refused from the registry · budget stop at `MAX_STEPS=2` |
 
-Plus: `demo-02` (dynamic router), `demo-03` (conversational REPL).
+Plus: `demo-02` (dynamic planner — prints every *proposed → corrected → dispatched*
+decision and a measured fixed-vs-dynamic cost), `demo-03` (conversational REPL).
 
 ---
 
@@ -109,13 +110,18 @@ Plus: `demo-02` (dynamic router), `demo-03` (conversational REPL).
 ### Step 1: C1 — study and run the fixed chain (15 min)
 
 ```bash
-python scripts/week-06/demo-01-fixed-chain.py   # and: node scripts/week-06/demo-01-fixed-chain.js
+python scripts/week-06/demo-01-fixed-chain.py   # (node demo-01 is a lighter run: same graph, less tracing)
 ```
 
-Watch the audit trail: every node records itself (`extract_service → retrieve_context
-→ check_build → generate_report`), the report is an `AgentAnswer` (Week 2 contract),
-and `steps == 4` — the tests assert exactly that. The path is *recorded*, never
-reconstructed from state.
+The demo **streams the compiled graph** — `build_fixed_chain()` turns nodes +
+hardcoded edges into a runtime, and the runtime walks them (`extract → retrieve →
+check_build → report → END`). Nothing below is a hand-written loop. After each
+transition you get:
+
+- the node's audit event with its **cost delta** (every event carries one),
+- which state fields are now **filled**, which are **still `None`** —
+  an empty field here is exactly the C2 fuel demo-04 will burn,
+- the final `AgentAnswer` (Week 2 contract) and `steps == 4` — the tests assert it.
 
 ### Step 2: dynamic routing (10 min)
 
@@ -123,11 +129,21 @@ reconstructed from state.
 python scripts/week-06/demo-02-dynamic-routing.py
 ```
 
-The planner node proposes, the registry disposes. Note what's structural vs prompt:
-the router *suggests* `check_incidents` for a health query sometimes — the scope
-check (`allowed` steps for the query category) rejects it, the correction loop runs
-once, and the guard resolves the fallback. Anti-cascade is a **contract**, not a
-hope.
+The planner node proposes, the registry disposes — and the demo **prints every
+decision**:
+
+```
+🧠  plan decisions (LLM proposes → code disposes):
+   ✅ proposed check_build → accept  · $0.000053
+   ⚠️  proposed check_build → corrected  → dispatched: retrieve  · $0.000112
+   ⚠️  proposed check_build → fallback  → dispatched: report     · $0.000114
+```
+
+What's structural vs prompt: the router *suggests* an already-collected or
+out-of-scope step, the scope check rejects it, the correction loop runs once, and
+the guard resolves the fallback. Anti-cascade is a **contract**, not a hope. The
+demo also runs the same query through demo-01's fixed chain and prints both costs —
+measured, not asserted.
 
 ### Step 3: C2 — remove a step, watch it hallucinate (12 min)
 
@@ -138,21 +154,38 @@ python scripts/week-06/demo-04-missing-step.py
 `check_build` is gone. `state['build_status']` is `None`. The naive report node
 renders `BUILD: {}` and the model completes the report anyway — because it predicts
 tokens, it doesn't reason about missing data. Same mechanism as Week 4's tool-error
-hallucination. The demo then attaches the guard to the *same* broken graph and shows
-the typed blocked answer instead.
+hallucination.
 
-### Step 4: C3 — guards and refusal (15 min)
+Detection checks **claims against state**, not keywords: fabricated evidence
+(`source="tool"` citing build data while state is `None`) or an *affirmative* build
+claim (status words near "build") — hedges like *"build status was not provided"*
+are honest and are **not** flagged (a naive keyword count would false-positive on
+"incide**ci**nts" and on hedges that mention "build"). If this run hedges, the demo
+says so: *hedging is luck, not a guardrail.*
+
+The demo then attaches the guard to the *same* broken graph and shows the typed
+blocked answer instead.
+
+### Step 4: C3 — validity, refusal, budget (15 min)
 
 ```bash
 python scripts/week-06/demo-05-guard-and-refusal.py
 ```
 
-Three tests: guard passes → report; guard blocks → typed `ready=False` answer
-(written by code, zero LLM spend); `Deploy auth-service to production` → refused
-before any LLM routing call, message built from the registry.
+Four tests, each printing the guard's actual decision (`validate → PASS/BLOCKED`)
+from the audit — never inferred:
 
-**Break it:** in `src/agent.py` set `MAX_STEPS = 2`, run a full-assessment query,
-watch `budget_guard` stop the run with a typed answer. Set it back to `10`.
+1. build checked → guard passes → report generated
+2. `check_build` removed → guard blocks with a typed `ready=False` answer, and the
+   **cost proof** shows `generate_report` never ran (blocked run ≈ $0.00001 vs
+   $0.0004 — *a guard that spends tokens isn't a guard, it's a suggestion*)
+3. `Deploy auth-service to production` → refused before any LLM routing call,
+   message built from the registry
+4. budget guard: `MAX_STEPS` forced to `2` → run stops with the typed
+   `AGENT BUDGET EXCEEDED` answer (zero tokens), then restores the constant
+
+**Break it yourself:** in the REPL or a scratch run, set `MAX_STEPS = 4` in
+`src/agent.py`, re-run a full-assessment query, watch where it stops. Set it back.
 
 **Extend:** add `get_service_owner` to `src/mcp_server.py`, then add one entry to
 `NODE_REGISTRY` — the router catalog, the route map, and the guard requirements all
@@ -162,11 +195,11 @@ pick it up automatically. Restart the server, run demo-02. One dict, four surfac
 
 ## Acceptance Criteria
 
-- [ ] C1: fixed chain runs end-to-end; audit trail shows 4 recorded steps; report is an `AgentAnswer`
-- [ ] C2: you saw the naive report invent build data from empty state (`demo-04`)
-- [ ] C3: guard blocks the missing-step graph with a typed answer; passes with data
-- [ ] Refusal: `Deploy auth-service to production` is refused, listing only registry entries
-- [ ] You can trace steps + cost per run, and explain where the cost comes from
+- [ ] C1: the compiled graph drives the fixed chain (streamed); audit shows 4 recorded steps with **per-step cost deltas**; report is an `AgentAnswer`
+- [ ] C2: you saw the naive report vs state — detected hallucination, or an honestly labeled hedge (`demo-04`)
+- [ ] C3: guard passes with data; blocks the missing-step graph with a typed answer at measurably lower cost; budget stops at `MAX_STEPS=2`
+- [ ] Refusal: `Deploy auth-service to production` is refused, listing only registry entries, with the plan reason in the audit
+- [ ] You can read a plan record (`proposal → decision → dispatched`) and explain every correction
 - [ ] You can flip `TOOL_BACKEND=local` and run the same agent without the MCP server
 - [ ] You can explain: *in-graph guards see state; Week 7 guardrails see only I/O*
 
@@ -175,8 +208,10 @@ pick it up automatically. Restart the server, run demo-02. One dict, four surfac
 ## Self-Learning (Before Week 7)
 
 ### Part A: fixed vs dynamic, cost
-Run 5 queries through `run_fixed_chain` and `run_dynamic_agent`. Compare steps, LLM
-calls, total cost. When is fixed better? When is dynamic worth the planning overhead?
+demo-02 already measures one query — start from that. Run 5 queries through
+`run_fixed_chain` and `run_dynamic_agent`. Compare steps, LLM calls, total cost
+(every audit event carries its delta). When is fixed better? When is dynamic worth
+the planning overhead?
 
 ### Part B: coherence audit — THREE cases
 For each: what was asked → what the agent planned (from `messages`) → what it
@@ -224,6 +259,7 @@ both (`TOOL_BACKEND`); the tradeoff is yours to state.
 | Guard blocks a query you think should run | Check `REQUIREMENTS[classify_query(query)]` — the guard only demands what the category requires |
 | Router proposes a weird step | Watch `messages` — `plan` records proposal, decision, and reason; the registry check is auditable |
 | Empty model completions | The loops retry once with an nudge (`_final_answer`); if it persists, provider-side issue |
+| `demo-04` prints "the model hedged this run" | That's an honest outcome — the model declined to assert build data. The vulnerability is still shown; hedging is luck, not a guardrail |
 | Retrieval returns empty strings in one language | Node and Python use SEPARATE Qdrant collections (`devbuddy-docs-node` / `devbuddy-docs`) — payload schemas are incompatible; re-index the language you're using |
 
 ---

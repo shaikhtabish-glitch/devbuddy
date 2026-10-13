@@ -285,8 +285,10 @@ vector store. This is the compositional pattern: `tools.py` doesn't need to impo
 `rag.py`. The tool just needs data. Where that data comes from is an implementation
 detail.
 
-In Week 6, the agent will compose both modules directly — orchestrating retrieval
-and tool calls as separate steps. This bonus is just a preview of that pattern.
+In Week 6, the agent orchestrates retrieval and tool calls as separate steps —
+importing `rag` directly and reaching tools through a seam that is either a direct
+import (local backend) or the Week 5 MCP server. This bonus is just a preview of
+that pattern.
 
 ---
 
