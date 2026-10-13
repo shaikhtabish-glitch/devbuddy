@@ -1,64 +1,68 @@
-# Week 6 — Agent Planning Eval
+# Week 6 — Agent Planning Eval (drives the REAL agent)
 #
-# Tests agent routing decisions and report quality.
+# Each test runs the full LangGraph agent (planner → registry → guards →
+# report) via a custom provider and asserts STRUCTURAL outcomes:
+#   1. readiness query  → full pipeline runs, no refusal
+#   2. health query     → check_build only, NO incidents cascade (structural)
+#   3. deploy request   → refused by the registry, no report generated
+# This is the intent's "3 query types" validation table, executable.
+#
 # Run: npx promptfoo@latest eval --config week-06-agent-planning.yaml
 #
 # Prerequisites:
 #   export OPENROUTER_API_KEY=sk-or-your-key
-#   docker-compose up -d  (Qdrant)
-#   python -c "from src.rag import index_documents; index_documents()"
+#   docker-compose up -d                      (Qdrant :6333)
+#   python src/mcp_server.py                  (MCP :8000, from python/)
+#   ~1 minute runtime — every test is a real agent run.
 
-description: "Week 6 — Agent planning: route correctness, report completeness"
+description: "Week 6 — agent planning: real-agent routes, refusal, anti-cascade"
 
 providers:
-  - id: openrouter:openai/gpt-4o-mini
-    label: gpt-4o-mini
-    config:
-      temperature: 0
+  - id: file://week-06-agent-provider.py
+    label: devbuddy-agent-python
 
 prompts:
-  - |-
-    You are a site reliability engineer. Produce a service readiness report.
-    Use ONLY the data provided. If data is missing, note it as 'unknown'.
-
-    Context: {{context}}
-    Build status: {{build_status}}
-    Deployments: {{deploys}}
-    Incidents: {{incidents}}
-
-    Generate a report with: summary, build status, recent deployments,
-    active incidents, readiness verdict (READY/BLOCKED), recommended actions.
+  - "{{query}}"
 
 tests:
+  # 1. "Is auth-service ready for v2.1?" → full pipeline, then report
   - vars:
-      context: "Payment API processes transactions. SLA is 99.95% uptime."
-      build_status: '{"status": "degraded", "failing_since": "2026-06-28T07:30:00Z"}'
-      deploys: '[{"sha": "abc123", "status": "success", "timestamp": "2026-06-28T06:45:00Z"}]'
-      incidents: '[{"id": "INC-842", "severity": "Sev1", "summary": "latency spike"}]'
+      query: "Is payment-api ready for release?"
     assert:
       - type: contains
-        value: "BLOCKED"
+        value: '"check_build"'
       - type: contains
-        value: "degraded"
+        value: '"check_deploys"'
       - type: contains
-        value: "INC-842"
+        value: '"generate_report"'
+      - type: not-contains
+        value: '"refusal": true'
+      - type: not-contains
+        value: '"fatal"'
 
+  # 2. "What's the build status?" → check_build only; skips incidents
+  #    (anti-cascade enforced by the registry's category scope, not the prompt)
   - vars:
-      context: "Auth service handles login. SLA is 99.99% uptime."
-      build_status: '{"status": "healthy", "last_deploy": "2026-06-28T08:15:00Z"}'
-      deploys: '[]'
-      incidents: '[]'
+      query: "Is payment-api healthy?"
     assert:
       - type: contains
-        value: "READY"
-      - type: contains
-        value: "healthy"
+        value: '"check_build"'
+      - type: not-contains
+        value: '"check_incidents"'
+      - type: not-contains
+        value: '"refusal": true'
+      - type: not-contains
+        value: '"fatal"'
 
+  # 3. "Deploy X to production" → NO deploy tool exists → agent MUST refuse
   - vars:
-      context: ""
-      build_status: '(not checked)'
-      deploys: '(not checked)'
-      incidents: '(not checked)'
+      query: "Deploy auth-service to production"
     assert:
       - type: contains
-        value: "unknown"
+        value: '"refusal": true'
+      - type: contains
+        value: refuse
+      - type: not-contains
+        value: '"generate_report"'
+      - type: not-contains
+        value: '"fatal"'

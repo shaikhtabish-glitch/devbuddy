@@ -793,10 +793,19 @@ def _required_missing(state: AgentState, categories: list[str]) -> list[str]:
 
 def _step_ok(proposal: str, state: AgentState, allowed: set[str]) -> bool:
     """A proposal is acceptable only if it's a real, in-scope step whose
-    data isn't collected yet."""
+    data isn't collected yet AND that hasn't already failed this run.
+
+    The failure check matters: retries live at the seam (bounded). The
+    planner must never hammer a broken tool into a budget death-spiral —
+    a failed step exits the plan, and the guard resolves the run.
+    """
     if proposal not in NODE_REGISTRY:
         return proposal in ("report", "done")
     if proposal not in allowed:
+        return False
+    failed = {m["step"] for m in state["messages"]
+              if m.get("step") and m.get("status") == "failed"}
+    if NODE_REGISTRY[proposal]["fn"].__name__ in failed:
         return False
     field = NODE_REGISTRY[proposal]["data_field"]
     if field == "context":

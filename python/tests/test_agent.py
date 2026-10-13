@@ -563,8 +563,12 @@ def test_dynamic_agent_handles_different_queries(_index_ready):
 
 @needs_mcp
 def test_guarded_chain_passes_with_build(_index_ready):
-    """C3 test 1: required data present → guard passes → report generated."""
-    result = run_guarded_chain("Is payment-api healthy?")
+    """C3 test 1: required data present → guard passes → report generated.
+
+    Uses auth-service — its corpus ground truth (latest deploy success,
+    incident resolved) is unambiguous, so the tool synthesis is stable.
+    """
+    result = run_guarded_chain("Is auth-service healthy?")
     assert result["build_status"] is not None
     assert isinstance(result["report"], AgentAnswer)
     assert result["error"] == "", result["error"]

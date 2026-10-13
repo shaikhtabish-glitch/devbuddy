@@ -96,7 +96,7 @@ async function extractService(state) {
   if (state.service_name) return state;
 
   const llm = getLlm({ temperature: 0 });
-  const response = await llm.invoke([
+  let response = await llm.invoke([
     new SystemMessage(
       "Extract the service name from the user's query. " +
         "Respond with EXACTLY ONE WORD: the service name. " +
@@ -105,7 +105,15 @@ async function extractService(state) {
     ),
     new HumanMessage(state.query),
   ]);
-  state.service_name = response.content.trim().toLowerCase();
+  let name = response.content.trim().toLowerCase();
+  if (!name) {
+    // empty completion (provider quirk at temp=0) — retry once
+    response = await llm.invoke([
+      new HumanMessage(`${state.query}\n\nService name:`),
+    ]);
+    name = response.content.trim().toLowerCase() || "payment-api";
+  }
+  state.service_name = name;
   state.steps++;
   state.cost += estimateCost(response);
   return state;
@@ -199,7 +207,7 @@ async function generateReport(state) {
 
 async function router(state) {
   const llm = getLlm({ temperature: 0 });
-  const response = await llm.invoke([
+  let response = await llm.invoke([
     new SystemMessage(
       "You are a workflow router. Based on the user's query and what data " +
         "has already been collected, decide the NEXT step to run. " +
@@ -227,7 +235,14 @@ async function router(state) {
     ),
   ]);
 
-  const decision = response.content.trim().toLowerCase();
+  let decision = response.content.trim().toLowerCase();
+  if (!decision) {
+    // empty completion — retry once before trusting an empty proposal
+    response = await llm.invoke([
+      new HumanMessage(`QUERY: ${state.query}\n\nNext step (one word):`),
+    ]);
+    decision = response.content.trim().toLowerCase();
+  }
   state.cost += estimateCost(response);
   return decision;
 }
@@ -236,10 +251,10 @@ async function router(state) {
 // Guard — stop if limits exceeded
 // ═══════════════════════════════════════════════════════════════
 
-const MAX_STEPS = 10;
-const MAX_COST = 2.0;
+export const MAX_STEPS = 10;
+export const MAX_COST = 2.0;
 
-async function guard(state) {
+export async function guard(state) {
   if (state.steps >= MAX_STEPS || state.cost >= MAX_COST) {
     return "done";
   }

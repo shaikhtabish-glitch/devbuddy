@@ -45,6 +45,14 @@ Unit tests (state, guards, registry, refusal) run anywhere. Integration tests ar
 marked `skipif` — they tell you exactly which service they couldn't reach instead
 of erroring. All green with services up = fully verified.
 
+The executable validation table (needs the services above, ~1 min):
+
+```bash
+cd shared/evals
+npx promptfoo@latest eval --config week-06-agent-planning.yaml
+# → 3 passed: full pipeline · health-only (no cascade) · deploy refusal
+```
+
 ---
 
 ## What You Have
@@ -215,7 +223,8 @@ both (`TOOL_BACKEND`); the tradeoff is yours to state.
 | Node MCP connection refused | Node server is port **3001** (`node src/mcp_server.js`) |
 | Guard blocks a query you think should run | Check `REQUIREMENTS[classify_query(query)]` — the guard only demands what the category requires |
 | Router proposes a weird step | Watch `messages` — `plan` records proposal, decision, and reason; the registry check is auditable |
-| Empty model completions | The loops retry once with a nudge (`_final_answer`); if it persists, provider-side issue |
+| Empty model completions | The loops retry once with an nudge (`_final_answer`); if it persists, provider-side issue |
+| Retrieval returns empty strings in one language | Node and Python use SEPARATE Qdrant collections (`devbuddy-docs-node` / `devbuddy-docs`) — payload schemas are incompatible; re-index the language you're using |
 
 ---
 

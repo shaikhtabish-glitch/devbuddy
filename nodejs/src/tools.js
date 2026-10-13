@@ -299,6 +299,31 @@ const AGENT_SYSTEM_PROMPT =
  * @param {number} [temperature=0.0] - 0.0 for deterministic output.
  * @returns {Promise<string>} The model's final answer.
  */
+/**
+ * Force a non-empty text answer from the model.
+ *
+ * Providers occasionally return an EMPTY completion for an exact message
+ * shape (deterministic at temperature=0 — identical request, identical
+ * empty response). An empty answer is never a valid outcome of a tool
+ * loop, so retry once with an explicit nudge.
+ *
+ * @param {Object} llm - the model (no tools bound).
+ * @param {Array} messages - conversation so far (not mutated).
+ * @returns {Promise<{text: string, message: Object}>}
+ */
+async function finalAnswer(llm, messages) {
+  let text = "";
+  let response = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    response = await llm.invoke(messages);
+    text = _asText(response);
+    if (text.trim()) break;
+    messages = [...messages, new HumanMessage(
+      "Provide your final answer now, in plain text.")];
+  }
+  return { text, message: response };
+}
+
 export async function runToolLoop(userQuery, temperature = 0.0) {
   const llm = getLlm({ temperature });
   const llmWithTools = llm.bindTools(ALL_TOOLS);
@@ -313,7 +338,8 @@ export async function runToolLoop(userQuery, temperature = 0.0) {
     messages.push(response);
 
     if (!response.tool_calls || response.tool_calls.length === 0) {
-      return _asText(response);
+      if (_asText(response).trim()) return _asText(response);
+      return (await finalAnswer(llm, messages)).text;
     }
 
     for (const tc of response.tool_calls) {
@@ -323,8 +349,7 @@ export async function runToolLoop(userQuery, temperature = 0.0) {
   }
 
   // The model kept calling tools — drop the tools and force a text answer.
-  const final = await llm.invoke(messages);
-  return _asText(final);
+  return (await finalAnswer(llm, messages)).text;
 }
 
 /**
@@ -373,7 +398,16 @@ export async function runToolLoopWithTrace(userQuery, temperature = 0.0) {
 
     if (!response.tool_calls || response.tool_calls.length === 0) {
       trace.answer = _asText(response);
-      trace.steps.push({ type: "answer", content: trace.answer, tokens: usage });
+      let answerMsg = response;
+      if (!trace.answer.trim()) {
+        // empty completion → forced retry (see finalAnswer)
+        trace.steps.push({ type: "decide", content: "(empty completion — retrying)", tokens: {} });
+        const forced = await finalAnswer(llm, messages);
+        trace.answer = forced.text;
+        answerMsg = forced.message;
+        accrue(_usageOf(answerMsg));
+      }
+      trace.steps.push({ type: "answer", content: trace.answer, tokens: _usageOf(answerMsg) });
       trace.usage = usageTotals;
       return trace;
     }
@@ -388,11 +422,10 @@ export async function runToolLoopWithTrace(userQuery, temperature = 0.0) {
   }
 
   // The model kept calling tools — drop the tools and force a text answer.
-  const final = await llm.invoke(messages);
-  const usage = _usageOf(final);
-  accrue(usage);
-  trace.answer = _asText(final);
-  trace.steps.push({ type: "answer", content: trace.answer, tokens: usage });
+  const forced = await finalAnswer(llm, messages);
+  trace.answer = forced.text;
+  accrue(_usageOf(forced.message));
+  trace.steps.push({ type: "answer", content: trace.answer, tokens: _usageOf(forced.message) });
   trace.usage = usageTotals;
   return trace;
 }

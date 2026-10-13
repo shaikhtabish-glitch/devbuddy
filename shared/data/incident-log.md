@@ -3,7 +3,7 @@
 ## INC-842 — payment-api latency spike
 **Date:** 2026-06-28
 **Severity:** Sev1
-**Status:** Resolved
+**Status:** Investigating
 **Error code:** 408 (timeout)
 **Root cause:** Database connection pool exhausted under peak load. Increased pool size from 20 to 50.
 **Affected:** 15% of requests for 45 minutes.

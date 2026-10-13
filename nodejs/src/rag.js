@@ -21,7 +21,10 @@ import { getLlm } from "./llm.js";
 // ─── Config ───────────────────────────────────────────────────
 const EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
 const QDRANT_URL = process.env.QDRANT_URL || "http://localhost:6333";
-const QDRANT_COLLECTION = "devbuddy-docs";
+// OWN collection: the JS and Python vector stores serialize payloads with
+// different keys (content vs page_content) — sharing one collection means
+// whichever language indexes last silently breaks the other's retrieval.
+const QDRANT_COLLECTION = "devbuddy-docs-node";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = resolve(__dirname, "..", "..", "shared", "data");
 

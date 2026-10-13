@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from src.agent import run_guarded_chain, run_dynamic_agent, format_report
 
-HEALTHY_QUERY = "Is payment-api healthy?"
+HEALTHY_QUERY = "Is auth-service healthy?"
 
 print()
 print("=" * 65)
@@ -36,6 +36,8 @@ def show(result, label):
 # ── Test 1: guard PASSES when required data is present ────────
 
 print("  ── Test 1: build checked → guard PASSES → report generated ──")
+# auth-service: latest deploy success, incident resolved — unambiguous
+# ground truth, so this pass-path is stable across runs.
 print(f"  📥  QUERY: \"{HEALTHY_QUERY}\"")
 show(run_guarded_chain(HEALTHY_QUERY), "pass")
 

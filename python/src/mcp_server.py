@@ -66,7 +66,10 @@ def _synthesise(instructions: str, query: str, k: int = 5) -> str:
                 "Only use data present in the provided context. Do not invent information. "
                 "Return ONLY valid JSON (object or array) — no markdown, no prose.\n\n"
                 "If no relevant data is found in the context, return a JSON object "
-                "with 'status': 'unknown' and 'reason': 'no matching data found'.\n\n"
+                "with 'status': 'unknown', 'last_deploy': \"\" (empty string), "
+                "'failing_since': null, and 'reason': 'no matching data found'. "
+                "Every status object MUST include 'last_deploy' — the caller's "
+                "contract rejects objects without it.\n\n"
                 f"{instructions}"
             )),
             HumanMessage(content=f"Context:\n{context}")
@@ -82,10 +85,15 @@ def _synthesise(instructions: str, query: str, k: int = 5) -> str:
             json.loads(text)
             return text
         except (json.JSONDecodeError, ValueError):
-            return json.dumps({"status": "unknown", "reason": "could not parse tool result"})
+            # fallback must still satisfy the BuildStatus contract
+            return json.dumps({"status": "unknown", "last_deploy": "",
+                               "failing_since": None,
+                               "reason": "could not parse tool result"})
     except Exception as e:
         return json.dumps({
             "status": "unknown",
+            "last_deploy": "",
+            "failing_since": None,
             "reason": f"tool error: {type(e).__name__} — {str(e)}"
         })
 
@@ -140,7 +148,10 @@ def get_build_status(service_name: str) -> str:
             "current status anything but healthy.\n"
             "4. status = 'degraded'/'down' ONLY with evidence dated AFTER the last "
             "successful deploy (an unresolved incident, or a later failed/"
-            "rolling_back deploy); failing_since = that evidence's date."
+            "rolling_back deploy); failing_since = that evidence's date.\n"
+            "5. 'down' means the service is NOT serving traffic. Traffic flowing "
+            "with elevated latency/errors = 'degraded'. A most-recent successful "
+            "deploy plus an active incident is 'degraded', never 'down'."
         ),
         query=f"{service_name} latest deploy build health status most recent",
     )

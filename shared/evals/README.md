@@ -26,5 +26,5 @@ This runs a basic eval: does the model return valid JSON with the expected field
 | `week-03-rag-grounding.yaml` | Week 3 | Retrieved context relevance, hallucination suppression |
 | `week-04-tool-selection.yaml` | Week 4 | Correct tool routing, error handling |
 | `week-05-mcp-tool-ecosystem.yaml` | Week 5 | Tool synthesis: valid JSON, correct structure for each tool |
-| `week-06-agent-planning.yaml` | Week 6 | Step sequence correctness, state coherence |
+| `week-06-agent-planning.yaml` | Week 6 | **Drives the real agent**: route correctness, structural anti-cascade, registry refusal (needs Qdrant + MCP server; custom provider in `week-06-agent-provider.py`) |
 | `week-07-production-suite.yaml` | Week 7 | Guardrails, cost, latency, provider swap |
