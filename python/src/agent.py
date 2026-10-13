@@ -9,8 +9,9 @@ A state-machine agent composed from the modules built in Weeks 1-5:
         ReadinessVerdict, EvidenceChunk,
     )
     from src.rag import retrieve                # Week 3 — retrieval
-    # Tools: Week 5 MCP server over SSE, executed with Week 4's
-    #        error-recovery semantics (retry + structured failure).
+    call_tool(...)                              # THE SEAM: Week 4 execution
+                                                # semantics over the Week 5
+                                                # MCP server (or local W4 tools)
 
 State is explicit and typed:
   - every data field is a contract (or None — "not checked yet"),
@@ -20,7 +21,7 @@ State is explicit and typed:
 The report is a structured AgentAnswer — Week 2 validators run on the
 agent's own output before anyone reads it.
 """
-import os, sys, json, asyncio
+import os, sys, json, time, asyncio
 from typing import TypedDict, Optional
 
 from langgraph.graph import StateGraph, END
@@ -41,25 +42,105 @@ from src.rag import retrieve
 
 
 # ═══════════════════════════════════════════════════════════════
-# MCP tool calls — SSE client to long-lived server
+# call_tool — THE SEAM
 # ═══════════════════════════════════════════════════════════════
-# Start the server in another terminal: python src/mcp_server.py
-# Model loads once. All tool calls reuse the same process.
+# One way for every node to reach a tool. The backend is a config
+# decision, not an architecture fork:
+#
+#   TOOL_BACKEND=mcp    (default) — Week 5 server over SSE, RAG-backed
+#   TOOL_BACKEND=local            — Week 4 src.tools in-process
+#
+# Same tool names, same contracts, same retry policy — swap the wire,
+# not the code. Transport + parsing + contract validation are retried
+# as ONE unit; when retries are exhausted the failure is a structured
+# ToolFailure, never a crash and never a silent None.
 
 MCP_URL = "http://127.0.0.1:8000/sse"
+TOOL_MAX_RETRIES = 2
 
 
-def _call_mcp_tool(tool_name: str, args: dict) -> str:
-    """Call a tool on the MCP server over SSE. Returns the raw text result."""
+class ToolFailure(Exception):
+    """All retries exhausted. Carries context for the audit trail."""
+
+
+def _transport_mcp(name: str, args: dict) -> str:
+    """Week 5 backend: SSE client to the long-lived server."""
     async def _call():
         from mcp.client.sse import sse_client
         from mcp import ClientSession
         async with sse_client(MCP_URL) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                result = await session.call_tool(tool_name, args)
+                result = await session.call_tool(name, args)
                 return result.content[0].text if result.content else "no result"
     return asyncio.run(_call())
+
+
+def _transport_local(name: str, args: dict) -> str:
+    """Week 4 backend: in-process tools through execute_tool_safely's
+    registry + structured-failure contract (retries live at the seam)."""
+    from src.tools import execute_tool_safely  # Week 4 — imported, not copied
+    raw = execute_tool_safely({"name": name, "args": args}, max_retries=0)
+    data = json.loads(raw)
+    if isinstance(data, dict) and (
+        data.get("status") == "failed" or "available_tools" in data
+    ):
+        raise ToolFailure(f"{name}: {data.get('error')}")
+    return raw
+
+
+def _looks_like_failure(data) -> bool:
+    """Structured failure markers shared by both backends."""
+    return isinstance(data, dict) and (
+        data.get("status") == "failed" or "available_tools" in data
+    )
+
+
+def call_tool(name: str, args: dict, contract=None, many: bool = False,
+              max_retries: int = TOOL_MAX_RETRIES):
+    """
+    Call a tool and return a VALIDATED contract.
+
+    Args:
+        name:    tool name (identical on both backends)
+        args:    tool arguments
+        contract: Pydantic model to validate the result into (None = raw text)
+        many:    result is a list of contracts, not one
+        max_retries: attempts for transport AND contract failures alike
+
+    Returns:
+        contract instance (or list of them), or raw string if contract is None.
+
+    Raises:
+        ToolFailure: after max_retries+1 attempts — structured, never a crash.
+    """
+    backend = os.environ.get("TOOL_BACKEND", "mcp").strip().lower()
+    transport = _transport_local if backend == "local" else _transport_mcp
+
+    last = None
+    for attempt in range(1, max_retries + 2):
+        try:
+            raw = transport(name, args)
+            if contract is None:
+                return raw
+            data = json.loads(raw)
+            if _looks_like_failure(data):
+                raise ToolFailure(f"{name}: {data.get('error') or data}")
+            if many:
+                if not isinstance(data, list):
+                    raise ToolFailure(
+                        f"{name}: expected an array, got {type(data).__name__}")
+                return [contract.model_validate(item) for item in data]
+            return contract.model_validate(data)
+        except Exception as e:  # transport, parse, or contract violation
+            last = e
+            if attempt <= max_retries:
+                time.sleep(1)  # backoff before retry — mirrors Week 4
+
+    raise ToolFailure(
+        f"{name}: failed after {max_retries + 1} attempt(s) — "
+        f"{type(last).__name__}: {last}"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -195,11 +276,11 @@ def _tool_failure(state: AgentState, step: str, exc: Exception) -> None:
 
 
 def check_build(state: AgentState) -> AgentState:
-    """Call get_build_status via MCP; validate into the BuildStatus contract."""
+    """get_build_status through the seam → validated BuildStatus contract."""
     svc = _get_service(state)
     try:
-        raw = _call_mcp_tool("get_build_status", {"service_name": svc})
-        state["build_status"] = BuildStatus.model_validate_json(raw)
+        state["build_status"] = call_tool(
+            "get_build_status", {"service_name": svc}, contract=BuildStatus)
         _record(state, "check_build", status=state["build_status"].status)
     except Exception as e:
         _tool_failure(state, "check_build", e)
@@ -208,14 +289,12 @@ def check_build(state: AgentState) -> AgentState:
 
 
 def check_deploys(state: AgentState) -> AgentState:
-    """Call get_recent_deploys via MCP; validate into DeployRecord contracts."""
+    """get_recent_deploys through the seam → validated DeployRecord contracts."""
     svc = _get_service(state)
     try:
-        raw = _call_mcp_tool("get_recent_deploys", {"service_name": svc, "limit": 3})
-        data = json.loads(raw)
-        if not isinstance(data, list):
-            raise ValueError(f"expected a deploy array, got: {raw[:120]}")
-        state["deploys"] = [DeployRecord.model_validate(d) for d in data]
+        state["deploys"] = call_tool(
+            "get_recent_deploys", {"service_name": svc, "limit": 3},
+            contract=DeployRecord, many=True)
         _record(state, "check_deploys", count=len(state["deploys"]))
     except Exception as e:
         _tool_failure(state, "check_deploys", e)
@@ -224,14 +303,12 @@ def check_deploys(state: AgentState) -> AgentState:
 
 
 def check_incidents(state: AgentState) -> AgentState:
-    """Call get_active_incidents via MCP; validate into Incident contracts."""
+    """get_active_incidents through the seam → validated Incident contracts."""
     svc = _get_service(state)
     try:
-        raw = _call_mcp_tool("get_active_incidents", {"service_name": svc})
-        data = json.loads(raw)
-        if not isinstance(data, list):
-            raise ValueError(f"expected an incident array, got: {raw[:120]}")
-        state["incidents"] = [Incident.model_validate(d) for d in data]
+        state["incidents"] = call_tool(
+            "get_active_incidents", {"service_name": svc},
+            contract=Incident, many=True)
         _record(state, "check_incidents", count=len(state["incidents"]))
     except Exception as e:
         _tool_failure(state, "check_incidents", e)

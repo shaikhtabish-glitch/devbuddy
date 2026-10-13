@@ -20,6 +20,7 @@ from src.agent import (
     check_deploys, check_incidents, generate_report, router, guard,
     build_fixed_chain, build_dynamic_agent,
     run_fixed_chain, run_dynamic_agent, _init_state,
+    call_tool, ToolFailure,
     MAX_STEPS, MAX_COST,
 )
 
@@ -222,6 +223,59 @@ def test_generate_report_runs_with_missing_fields():
     assert isinstance(state["report"], AgentAnswer)
     assert state["report"].answer
     assert state["error"] == "", state["error"]
+
+
+# ═══════════════════════════════════════════════════════════════
+# The seam — call_tool with pluggable backends
+# ═══════════════════════════════════════════════════════════════
+
+def test_seam_local_backend_returns_contract(monkeypatch):
+    """Same tool name, no server: Week 4's in-process tools behind the seam."""
+    monkeypatch.setenv("TOOL_BACKEND", "local")
+    result = call_tool("get_build_status", {"service_name": "payment-api"},
+                       contract=BuildStatus)
+    assert isinstance(result, BuildStatus)
+    assert result.status == "degraded"  # W4 mock data — deterministic
+
+
+def test_seam_local_backend_unknown_tool_fails_structured(monkeypatch):
+    """No tool registered → ToolFailure with the registry in the message,
+    not a crash and not a silent None."""
+    monkeypatch.setenv("TOOL_BACKEND", "local")
+    with pytest.raises(ToolFailure) as exc:
+        call_tool("deploy_service", {"service_name": "payment-api"})
+    assert "deploy_service" in str(exc.value)
+    assert "available_tools" in str(exc.value) or "Unknown tool" in str(exc.value)
+
+
+def test_seam_contract_violation_is_retried_then_fails(monkeypatch):
+    """A result that violates the contract is a RETRYABLE failure —
+    transport errors and schema violations share one policy."""
+    monkeypatch.setenv("TOOL_BACKEND", "local")
+    with pytest.raises(ToolFailure) as exc:
+        # build-status output will never satisfy the Incident contract
+        call_tool("get_build_status", {"service_name": "payment-api"},
+                  contract=Incident)
+    assert "attempt" in str(exc.value)
+
+
+def test_seam_local_backend_validates_lists(monkeypatch):
+    monkeypatch.setenv("TOOL_BACKEND", "local")
+    result = call_tool("get_recent_deploys", {"service_name": "auth-service"},
+                       contract=DeployRecord, many=True)
+    assert isinstance(result, list)
+    assert all(isinstance(d, DeployRecord) for d in result)
+
+
+@needs_qdrant
+def test_fixed_chain_runs_local_backend(_index_ready, monkeypatch):
+    """End-to-end with the wire swapped: same agent, zero MCP server."""
+    monkeypatch.setenv("TOOL_BACKEND", "local")
+    result = run_fixed_chain("Is payment-api healthy?")
+    assert isinstance(result["report"], AgentAnswer)
+    assert result["error"] == "", result["error"]
+    assert result["build_status"].status == "degraded"
+    assert result["steps"] == 4
 
 
 # ═══════════════════════════════════════════════════════════════
