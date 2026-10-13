@@ -21,7 +21,7 @@ State is explicit and typed:
 The report is a structured AgentAnswer — Week 2 validators run on the
 agent's own output before anyone reads it.
 """
-import os, sys, json, time, asyncio
+import os, sys, json, time, re, asyncio
 from typing import TypedDict, Optional
 
 from langgraph.graph import StateGraph, END
@@ -155,6 +155,7 @@ class AgentState(TypedDict):
     deploys: Optional[list[DeployRecord]]    # None = not checked yet
     incidents: Optional[list[Incident]]      # None = not checked yet
     report: Optional[AgentAnswer]            # None = not generated yet
+    next_step: str                           # planner's accepted decision
     steps: int
     cost: float
     error: str                               # "" = no failure so far
@@ -176,6 +177,7 @@ def _init_state(query: str) -> AgentState:
         "deploys": None,
         "incidents": None,
         "report": None,
+        "next_step": "",
         "steps": 0,
         "cost": 0.0,
         "error": "",
@@ -337,13 +339,17 @@ def generate_report(state: AgentState) -> AgentState:
     structured = llm.with_structured_output(AgentAnswer)
     capture = _UsageCapture()
 
-    sections = "\n\n".join([
-        f"Query: {state['query']}",
-        _data_section("Relevant documentation", state["context"] or None),
-        _data_section("Build status", state["build_status"]),
-        _data_section("Recent deployments", state["deploys"]),
-        _data_section("Active incidents", state["incidents"]),
-    ])
+    sections = "\n\n".join(
+        [part for part in [
+            f"Query: {state['query']}",
+            _data_section("Relevant documentation", state["context"] or None),
+            _data_section("Build status", state["build_status"]),
+            _data_section("Recent deployments", state["deploys"]),
+            _data_section("Active incidents", state["incidents"]),
+            (f"Tool errors encountered (mention if relevant to the query): "
+             f"{state['error']}" if state["error"] else None),
+        ] if part]
+    )
 
     system = (
         "You are a site reliability engineer. Answer the user's query using ONLY "
@@ -410,31 +416,124 @@ def format_report(report: Optional[AgentAnswer]) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════
-# Router — model decides the next step dynamically
+# Registry — the single source of truth for what the agent can do
 # ═══════════════════════════════════════════════════════════════
+# The router's step catalog, the graph's edge map, the guard's
+# requirements, and the refusal message are all DERIVED from this
+# dict — they cannot drift apart, because there is only one copy.
 
-def router(state: AgentState) -> str:
-    """Model decides which step to run next based on the query and current state."""
+NODE_REGISTRY: dict[str, dict] = {
+    "retrieve": {
+        "fn": retrieve_context,
+        "data_field": "context",
+        "desc": "Search internal documentation for the query (no service needed)",
+    },
+    "check_build": {
+        "fn": check_build,
+        "data_field": "build_status",
+        "desc": "Get CI/CD build/health status for the service",
+    },
+    "check_deploys": {
+        "fn": check_deploys,
+        "data_field": "deploys",
+        "desc": "Get recent deployment history for the service",
+    },
+    "check_incidents": {
+        "fn": check_incidents,
+        "data_field": "incidents",
+        "desc": "Get active (unresolved) incidents for the service",
+    },
+}
+
+FIELD_TO_STEP = {spec["data_field"]: name for name, spec in NODE_REGISTRY.items()}
+
+# Query category → state fields that MUST be present before a report is
+# generated. The validity guard derives "enough data for THIS query"
+# from here — not from prompt prose.
+REQUIREMENTS = {
+    "full": ["build_status", "deploys", "incidents"],
+    "readiness": ["build_status", "deploys"],
+    "health": ["build_status"],
+    "deploys": ["deploys"],
+    "incidents": ["incidents"],
+    "docs": ["context"],
+    "general": [],
+}
+
+# Imperative operational actions — refused deterministically, before any
+# LLM call. An agent with no deploy tool must not depend on a lucky prompt
+# to refuse a deploy.
+IMPERATIVE_ACTIONS = re.compile(
+    r"^\s*(deploy|roll\s?back|rollback|restart|scale|delete|kill|shutdown|wipe)\b"
+)
+
+
+def classify_query(query: str) -> str:
+    """Deterministic query category — code, not prompt. Order matters."""
+    q = query.lower()
+    if IMPERATIVE_ACTIONS.match(q):
+        return "action"
+    if any(w in q for w in ("full", "everything", "all checks", "end-to-end")):
+        return "full"
+    if any(w in q for w in ("ready", "readiness", "release", "assessment", "ship")):
+        return "readiness"
+    if any(w in q for w in ("incident", "outage", "alert")):
+        return "incidents"
+    if any(w in q for w in ("deployed", "deployment", "sha", "version")):
+        return "deploys"
+    if any(w in q for w in ("healthy", "health", "status", "build")):
+        return "health"
+    if any(w in q for w in ("doc", "spec", "api", "endpoint", "sla", "how", "what is", "why")):
+        return "docs"
+    return "general"
+
+
+def _router_catalog() -> str:
+    """The router's step list — GENERATED from the registry."""
+    lines = [f"- {name}: {spec['desc']}" for name, spec in NODE_REGISTRY.items()]
+    lines.append("- report: every field NEEDED for this query has been collected")
+    lines.append("- done: the task is complete or cannot proceed")
+    return "\n".join(lines)
+
+
+# The graph's route map — GENERATED from the registry too.
+# 'done' from the planner = "wrap up" → the GUARD decides (report or
+# blocked answer). Only 'stop' (budget exhausted) ends the run.
+PLAN_ROUTE_MAP = {
+    **{name: name for name in NODE_REGISTRY},
+    "report": "validate",
+    "done": "validate",
+    "refuse": "refuse",
+    "stop": END,
+}
+
+
+def router(state: AgentState, correction: str | None = None) -> str:
+    """Model PROPOSES the next step. The registry (in plan()) decides
+    whether the proposal is possible — the model never gets to invent
+    capabilities."""
     llm = get_llm(temperature=0)
+    system = (
+        "You are a workflow router. Based on the user's query and what data "
+        "has already been collected, propose the NEXT step. Respond with "
+        "EXACTLY ONE WORD from this list:\n\n"
+        f"{_router_catalog()}\n\n"
+        "Rules:\n"
+        "- Only run steps the query explicitly asks for. Do NOT cascade: "
+        "'healthy?' does not mean 'also check incidents'.\n"
+        "- NEVER propose a step whose data is already YES below.\n"
+        "- Docs/API/spec/SLA questions → retrieve only. Health/status → check_build "
+        "only. Deployments → check_deploys only. Incidents → check_incidents only.\n"
+        "- Propose 'report' as soon as everything the query needs is YES.\n"
+        "- If instead the query asks you to PERFORM an operational action "
+        "(deploy, rollback, restart, scale, delete), respond with that single "
+        "action word — it will be checked against the registry.\n"
+    )
+    if correction:
+        system += f"CORRECTION: {correction}\n"
+
     response = llm.invoke([
-        SystemMessage(content=(
-            "You are a workflow router. Based on the user's query and what data "
-            "has already been collected, decide the NEXT step to run. "
-            "Respond with EXACTLY ONE WORD from this list:\n\n"
-            "- retrieve   (if the query asks about documentation or context)\n"
-            "- check_build   (ONLY if the query asks about health, status, healthy, or readiness)\n"
-            "- check_deploys (ONLY if the query asks about deployments, releases, deployed, or what was deployed)\n"
-            "- check_incidents (ONLY if the query asks about incidents, outages, issues, or alerts)\n"
-            "- report    (if all NEEDED data has been collected for this specific query)\n"
-            "- done      (if the task is complete or cannot proceed)\n\n"
-            "IMPORTANT: Only run steps the query explicitly asks for. "
-            "If the query asks about docs/APIs/endpoints/SLA/specs → ONLY retrieve. Skip all tools. "
-            "If the query only asks about health/status → ONLY check_build. Skip deploys and incidents. "
-            "If the query only asks about deployments → ONLY check_deploys. Skip build and incidents. "
-            "If the query only asks about incidents → ONLY check_incidents. Skip build and deploys. "
-            "Only run ALL steps if the query asks for 'full assessment' or 'full report' or 'everything'. "
-            "Do NOT cascade. 'healthy?' does NOT mean 'also check incidents'."
-        )),
+        SystemMessage(content=system),
         HumanMessage(content=(
             f"QUERY: {state['query']}\n\n"
             f"CURRENT STATE:\n"
@@ -455,20 +554,199 @@ def router(state: AgentState) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════
-# Guard — stop if limits exceeded
+# Guards — three kinds, three jobs
 # ═══════════════════════════════════════════════════════════════
+# 1. budget_guard (operational) — steps/cost ceiling. Stops runaways.
+# 2. plan          (structural)  — LLM proposes, the REGISTRY disposes:
+#                                 unknown actions refused, repeats
+#                                 corrected — in code, not in prompt.
+# 3. validate      (business)    — required state present & acceptable
+#                                 BEFORE the report; writes the blocked
+#                                 report itself, deterministically.
 
 MAX_STEPS = 10
 MAX_COST = 2.00  # dollars
 
 
-def guard(state: AgentState) -> str:
-    """Stop if limits exceeded. Otherwise, let the router decide."""
-    if state["steps"] >= MAX_STEPS:
-        return "done"
-    if state["cost"] >= MAX_COST:
-        return "done"
-    return router(state)
+def budget_guard(state: AgentState) -> bool:
+    """Operational guard: has the run burned its budget?"""
+    return state["steps"] >= MAX_STEPS or state["cost"] >= MAX_COST
+
+
+def _required_missing(state: AgentState, category: str) -> list[str]:
+    """Fields this query needs that are not present. Shared by plan()
+    (fallback decisions) and validate() (the guard itself) — one
+    definition of 'enough data for this query'."""
+    missing = []
+    for field in REQUIREMENTS[category]:
+        value = state.get(field)
+        if value is None or (field == "context" and not value):
+            missing.append(field)
+    return missing
+
+
+def _step_ok(proposal: str, state: AgentState, allowed: set[str]) -> bool:
+    """A proposal is acceptable only if it's a real, in-scope step whose
+    data isn't collected yet."""
+    if proposal not in NODE_REGISTRY:
+        return proposal in ("report", "done")
+    if proposal not in allowed:
+        return False
+    field = NODE_REGISTRY[proposal]["data_field"]
+    if field == "context":
+        return not state["context"]  # "" = nothing retrieved yet
+    return state.get(field) is None
+
+
+def plan(state: AgentState) -> AgentState:
+    """Planner node: propose the next step, validate it against the registry.
+
+    LLM proposes; CODE decides. The accepted decision lands in
+    state['next_step'] — the conditional edge below only READS state,
+    it never re-asks the model.
+    """
+    if budget_guard(state):
+        # Hard stop — and still produce an answer, typed, without
+        # spending another token on an LLM call.
+        if state["report"] is None:
+            state["report"] = _blocked_answer(
+                ["AGENT BUDGET EXCEEDED: step/cost ceiling reached before a "
+                 "report was produced"],
+                ["Raise MAX_STEPS/MAX_COST, or narrow the query"])
+        state["next_step"] = "stop"
+        _record(state, "plan", decision="stop", reason="budget exceeded")
+        return state
+
+    # Deterministic refusal — imperative action, before any LLM call.
+    match = IMPERATIVE_ACTIONS.match(state["query"].lower())
+    if match:
+        state["next_step"] = "refuse"
+        _record(state, "plan", proposal=match.group(1), decision="refuse",
+                reason="imperative action — registry check before any LLM call")
+        return state
+
+    # Structural scope: which steps are worth proposing for THIS query?
+    category = classify_query(state["query"])
+    allowed = {FIELD_TO_STEP[f] for f in REQUIREMENTS[category]} | {"retrieve"}
+
+    proposal = router(state)
+    known = set(NODE_REGISTRY) | {"report", "done"}
+
+    if proposal not in known:
+        # The model asked for a capability that does not exist → refuse.
+        state["next_step"] = "refuse"
+        _record(state, "plan", proposal=proposal, decision="refuse",
+                reason="not in registry")
+        return state
+
+    if not _step_ok(proposal, state, allowed):
+        # Either already collected (anti-cascade) or out of scope for
+        # this query (anti-cascade-by-contract). Re-ask ONCE with the
+        # correction; if the model can't course-correct, the GUARD
+        # decides — never an unbounded loop, never the prompt alone.
+        retry = router(state, correction=(
+            f"'{proposal}' is not appropriate right now — it is either already "
+            "collected or not needed for this query type. Needed steps: "
+            f"{', '.join(sorted(s for s in allowed if _step_ok(s, state, allowed))) or 'none'}"
+            ". Propose one of those, or 'report'."
+        ))
+        if retry in known and _step_ok(retry, state, allowed):
+            proposal = retry
+            decision = "corrected"
+        else:
+            proposal = "report" if not _required_missing(state, category) else "validate"
+            decision = "fallback"
+        state["next_step"] = proposal
+        _record(state, "plan", proposal=proposal, decision=decision)
+        return state
+
+    state["next_step"] = proposal
+    _record(state, "plan", proposal=proposal, decision="accept")
+    return state
+
+
+def route_from_plan(state: AgentState) -> str:
+    """The edge is a pure read — plan() already made the decision."""
+    return state["next_step"]
+
+
+def _blocked_answer(reasons: list[str], next_steps: list[str]) -> AgentAnswer:
+    """The guard's output: a typed, deterministic answer — not prose."""
+    return AgentAnswer(
+        answer="Agent stopped before generating a report: " + "; ".join(reasons),
+        verdict=ReadinessVerdict(
+            ready=False,
+            confidence="low",
+            blockers=reasons,
+            recommended_next_steps=next_steps,
+        ),
+    )
+
+
+def validate(state: AgentState) -> AgentState:
+    """Validity guard: is the state acceptable for THIS query's report?
+
+    Checks required fields (derived from the query category) and hard
+    facts (failing build). On failure it writes the blocked report
+    itself — ready=False, typed, with reasons — and sets error.
+    """
+    category = classify_query(state["query"])
+    reasons: list[str] = []
+    next_steps: list[str] = []
+
+    for field in _required_missing(state, category):
+        step = FIELD_TO_STEP.get(field, field)
+        reasons.append(
+            f"REQUIRED DATA MISSING: '{field}' was never collected "
+            f"(step '{step}' skipped or failed)")
+        next_steps.append(f"Run {step} before answering this query")
+
+    build = state["build_status"]
+    if build is not None and build.status == "down":
+        since = f" since {build.failing_since}" if build.failing_since else ""
+        reasons.append(f"BUILD FAILING: status 'down'{since}")
+        next_steps.append("Fix the failing build before release")
+
+    if reasons:
+        state["error"] = f"guard ({category}): " + "; ".join(reasons)
+        state["report"] = _blocked_answer(reasons, next_steps)
+        _record(state, "validate", status="blocked", category=category)
+    else:
+        _record(state, "validate", status="passed", category=category)
+    return state
+
+
+def route_after_validate(state: AgentState) -> str:
+    """Blocked = the guard already wrote the report → stop.
+    Pass = no report yet → let the model generate one."""
+    return "end" if state["report"] is not None else "generate_report"
+
+
+def refuse(state: AgentState) -> AgentState:
+    """Registry-driven refusal: no tool exists for what was asked.
+
+    The message is CONSTRUCTED from the registry — the model never
+    invents the list of what's available.
+    """
+    proposal = next(
+        (m.get("proposal") for m in reversed(state["messages"])
+         if m["step"] == "plan" and "proposal" in m),
+        "unknown action",
+    )
+    available = ", ".join(NODE_REGISTRY)
+    state["error"] = f"refused: no registered step for '{proposal}'"
+    state["report"] = AgentAnswer(
+        answer=(f"I can't do that — '{proposal}' is not an available action. "
+                f"DevBuddy can: {available}."),
+        verdict=ReadinessVerdict(
+            ready=False,
+            confidence="low",
+            blockers=[f"Requested action '{proposal}' has no registered tool"],
+            recommended_next_steps=[f"Ask for one of: {available}"],
+        ),
+    )
+    _record(state, "refuse", action=proposal)
+    return state
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -495,34 +773,61 @@ def build_fixed_chain() -> StateGraph:
 
 def build_dynamic_agent() -> StateGraph:
     """
-    Dynamic agent: model decides the next step at runtime.
-    Extracts service name from query, then routes dynamically.
-    All 4 data-collection nodes available, plus report generation.
-    Guard prevents runaway loops.
+    Dynamic agent: plan → registry → act, in a loop.
+
+    One planner node, ONE conditional edge (reading state), and every
+    data node feeds back into the planner. The validity guard sits
+    between 'report' and the model — nothing reaches generate_report
+    without passing validate first.
+    """
+    graph = StateGraph(AgentState)
+    graph.add_node("extract_service", extract_service)
+    graph.add_node("plan", plan)
+    graph.add_node("validate", validate)
+    graph.add_node("refuse", refuse)
+    graph.add_node("report", generate_report)
+
+    for name, spec in NODE_REGISTRY.items():
+        graph.add_node(name, spec["fn"])
+        graph.add_edge(name, "plan")
+
+    graph.set_entry_point("extract_service")
+    graph.add_edge("extract_service", "plan")
+    graph.add_conditional_edges("plan", route_from_plan, PLAN_ROUTE_MAP)
+    graph.add_conditional_edges("validate", route_after_validate,
+                                {"generate_report": "report", "end": END})
+    graph.add_edge("refuse", END)
+    graph.add_edge("report", END)
+    return graph.compile()
+
+
+def build_guarded_chain(include_build: bool = True) -> StateGraph:
+    """
+    C3: fixed chain + validity guard (conditional edge before report).
+
+    include_build=False reproduces C2's missing-step graph WITH the
+    guard attached — the guard catches what the missing node left
+    behind, instead of letting the report fill the gap.
     """
     graph = StateGraph(AgentState)
     graph.add_node("extract_service", extract_service)
     graph.add_node("retrieve", retrieve_context)
     graph.add_node("check_build", check_build)
     graph.add_node("check_deploys", check_deploys)
-    graph.add_node("check_incidents", check_incidents)
+    graph.add_node("validate", validate)
     graph.add_node("report", generate_report)
 
     graph.set_entry_point("extract_service")
     graph.add_edge("extract_service", "retrieve")
-
-    # After each node, the guard routes to the next step (or stops)
-    route_map = {
-        "retrieve": "retrieve",
-        "check_build": "check_build",
-        "check_deploys": "check_deploys",
-        "check_incidents": "check_incidents",
-        "report": "report",
-        "done": END,
-    }
-    for node in ("retrieve", "check_build", "check_deploys", "check_incidents"):
-        graph.add_conditional_edges(node, guard, route_map)
-
+    if include_build:
+        graph.add_edge("retrieve", "check_build")
+        graph.add_edge("check_build", "check_deploys")
+    else:
+        graph.add_edge("retrieve", "check_deploys")
+    graph.add_edge("check_deploys", "validate")
+    graph.add_conditional_edges("validate", route_after_validate,
+                                {"generate_report": "report", "end": END})
+    graph.add_edge("report", END)
     return graph.compile()
 
 
@@ -539,4 +844,10 @@ def run_fixed_chain(query: str) -> dict:
 def run_dynamic_agent(query: str) -> dict:
     """Run the dynamic agent. Requires the MCP server + Qdrant."""
     agent = build_dynamic_agent()
+    return agent.invoke(_init_state(query))
+
+
+def run_guarded_chain(query: str, include_build: bool = True) -> dict:
+    """Run the C3 guarded chain. include_build=False = C2's missing step."""
+    agent = build_guarded_chain(include_build=include_build)
     return agent.invoke(_init_state(query))

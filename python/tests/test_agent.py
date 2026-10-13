@@ -17,9 +17,11 @@ from src.rag import index_documents
 from src.schemas import AgentAnswer, BuildStatus, DeployRecord, Incident, ReadinessVerdict
 from src.agent import (
     AgentState, extract_service, retrieve_context, check_build,
-    check_deploys, check_incidents, generate_report, router, guard,
-    build_fixed_chain, build_dynamic_agent,
-    run_fixed_chain, run_dynamic_agent, _init_state,
+    check_deploys, check_incidents, generate_report, router,
+    budget_guard, plan, validate, route_after_validate, refuse,
+    classify_query, NODE_REGISTRY, PLAN_ROUTE_MAP, REQUIREMENTS,
+    build_fixed_chain, build_dynamic_agent, build_guarded_chain,
+    run_fixed_chain, run_dynamic_agent, run_guarded_chain, _init_state,
     call_tool, ToolFailure,
     MAX_STEPS, MAX_COST,
 )
@@ -90,6 +92,7 @@ def test_init_state_defaults():
     assert state["deploys"] is None
     assert state["incidents"] is None
     assert state["report"] is None
+    assert state["next_step"] == ""
     assert state["steps"] == 0
     assert state["cost"] == 0.0
     assert state["error"] == ""
@@ -279,32 +282,136 @@ def test_fixed_chain_runs_local_backend(_index_ready, monkeypatch):
 
 
 # ═══════════════════════════════════════════════════════════════
-# Router + Guard
+# Registry + classification — the structural layer (pure, no LLM)
+# ═══════════════════════════════════════════════════════════════
+
+def test_classify_query_categories():
+    assert classify_query("Is payment-api ready for v2.1?") == "readiness"
+    assert classify_query("Is payment-api healthy?") == "health"
+    assert classify_query("What was deployed recently?") == "deploys"
+    assert classify_query("Any incidents for inventory-service?") == "incidents"
+    assert classify_query("What does the payment-api spec say?") == "docs"
+    assert classify_query("Deploy auth-service to production") == "action"
+    assert classify_query("Give me a full readiness assessment") == "full"
+    assert classify_query("hello") == "general"
+
+
+def test_registry_drives_router_catalog_and_route_map():
+    """One source of truth: the prompt's step list and the graph's edge
+    map both derive from NODE_REGISTRY — they cannot drift."""
+    from src.agent import _router_catalog
+    catalog = _router_catalog()
+    for name in NODE_REGISTRY:
+        assert f"- {name}:" in catalog
+    # every registry step is routable, plus report/done/refuse/stop
+    assert set(PLAN_ROUTE_MAP) == set(NODE_REGISTRY) | {"report", "refuse", "done", "stop"}
+    assert PLAN_ROUTE_MAP["report"] == "validate"
+    assert PLAN_ROUTE_MAP["done"] == "validate"  # "wrap up" → guard decides
+    # every requirement names a real state field with a real step
+    for fields in REQUIREMENTS.values():
+        for field in fields:
+            assert field in ("context", "build_status", "deploys", "incidents")
+
+
+# ═══════════════════════════════════════════════════════════════
+# The three guards (pure logic — no LLM, no services)
+# ═══════════════════════════════════════════════════════════════
+
+def test_budget_guard_trips_on_steps():
+    state = _init_service_state()
+    assert budget_guard(state) is False
+    state["steps"] = MAX_STEPS
+    assert budget_guard(state) is True
+
+
+def test_budget_guard_trips_on_cost():
+    state = _init_service_state()
+    state["cost"] = MAX_COST
+    assert budget_guard(state) is True
+
+
+def test_validate_blocks_when_required_build_missing():
+    """C3: readiness query, build never checked → guard STOPS the agent
+    and writes the blocked report itself — typed, deterministic."""
+    state = _init_service_state("Is payment-api ready for v2.1?")
+    state = validate(state)
+    assert state["report"] is not None
+    assert state["report"].verdict.ready is False
+    assert any("build_status" in b for b in state["report"].verdict.blockers)
+    assert state["error"].startswith("guard (readiness)")
+    assert route_after_validate(state) == "end"
+
+
+def test_validate_passes_when_required_data_present():
+    state = _init_service_state("Is payment-api healthy?")
+    state["build_status"] = BuildStatus(status="healthy",
+                                        last_deploy="2026-06-28T08:15:00Z")
+    state = validate(state)
+    assert state["report"] is None
+    assert state["error"] == ""
+    assert route_after_validate(state) == "generate_report"
+
+
+def test_validate_blocks_on_failing_build():
+    """Data present but DOWN → still blocked. The guard checks facts,
+    not just presence."""
+    state = _init_service_state("Is payment-api ready for release?")
+    state["build_status"] = BuildStatus(status="down",
+                                        last_deploy="2026-06-28T08:15:00Z",
+                                        failing_since="2026-06-28T09:00:00Z")
+    state["deploys"] = []
+    state = validate(state)
+    assert state["report"].verdict.ready is False
+    assert any("BUILD FAILING" in b for b in state["report"].verdict.blockers)
+
+
+def test_validate_blocks_docs_query_without_context():
+    state = _init_service_state("What does the payment-api spec say?")
+    state["context"] = ""  # retrieval failed / never ran
+    state = validate(state)
+    assert state["report"].verdict.ready is False
+    assert any("context" in b for b in state["report"].verdict.blockers)
+
+
+def test_refusal_message_is_built_from_registry():
+    """Refusal is constructed from NODE_REGISTRY — the model never
+    invents the list of available capabilities."""
+    state = _init_service_state("Deploy auth-service to production")
+    state["messages"].append({"step": "plan", "proposal": "deploy",
+                              "decision": "refuse"})
+    state = refuse(state)
+    assert state["report"].verdict.ready is False
+    assert "deploy" in state["report"].answer
+    for name in NODE_REGISTRY:
+        assert name in state["report"].answer or name in \
+            state["report"].verdict.recommended_next_steps[0]
+    assert state["error"].startswith("refused")
+
+
+def test_guarded_chain_compiles_both_variants():
+    assert build_guarded_chain() is not None
+    assert build_guarded_chain(include_build=False) is not None
+
+
+def test_refusal_end_to_end():
+    """'Deploy …' must be refused structurally — the deterministic
+    imperative check fires before any LLM routing call. Needs only the
+    LLM (service extraction), no MCP server, no Qdrant."""
+    result = run_dynamic_agent("Deploy auth-service to production")
+    assert result["next_step"] == "refuse"
+    assert result["error"].startswith("refused")
+    assert result["report"].verdict.ready is False
+    assert "check_build" in result["report"].answer  # registry listed
+
+
+# ═══════════════════════════════════════════════════════════════
+# Router
 # ═══════════════════════════════════════════════════════════════
 
 def test_router_returns_valid_step():
     state = _init_service_state()
     decision = router(state)
-    assert decision in ("retrieve", "check_build", "check_deploys",
-                        "check_incidents", "report", "done")
-
-
-def test_guard_stops_at_max_steps():
-    state = _init_service_state()
-    state["steps"] = MAX_STEPS
-    assert guard(state) == "done"
-
-
-def test_guard_stops_at_max_cost():
-    state = _init_service_state()
-    state["cost"] = MAX_COST
-    assert guard(state) == "done"
-
-
-def test_guard_delegates_when_under_limits():
-    state = _init_service_state()
-    decision = guard(state)
-    assert decision != "done"  # should route normally
+    assert decision in set(NODE_REGISTRY) | {"report", "done"}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -351,6 +458,30 @@ def test_dynamic_agent_handles_different_queries(_index_ready):
         assert isinstance(r["report"], AgentAnswer)
         assert r["report"].answer
         assert r["messages"]
+
+
+@needs_mcp
+def test_guarded_chain_passes_with_build(_index_ready):
+    """C3 test 1: required data present → guard passes → report generated."""
+    result = run_guarded_chain("Is payment-api healthy?")
+    assert result["build_status"] is not None
+    assert isinstance(result["report"], AgentAnswer)
+    assert result["error"] == "", result["error"]
+    assert any(m["step"] == "validate" and m["status"] == "passed"
+               for m in result["messages"])
+
+
+@needs_mcp
+def test_guarded_chain_blocks_when_check_build_removed(_index_ready):
+    """C3 test 2: the C2 missing-step graph WITH the guard → the guard
+    stops the agent instead of letting the report invent build data."""
+    result = run_guarded_chain("Is payment-api healthy?", include_build=False)
+    assert result["build_status"] is None
+    assert result["error"].startswith("guard (health)")
+    assert result["report"].verdict.ready is False
+    assert any("build_status" in b for b in result["report"].verdict.blockers)
+    # no LLM-generated report happened — the guard wrote a typed one
+    assert not any(m["step"] == "generate_report" for m in result["messages"])
 
 
 # ═══════════════════════════════════════════════════════════════
