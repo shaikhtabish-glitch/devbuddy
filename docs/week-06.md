@@ -35,15 +35,34 @@ node src/mcp_server.js
 # → http://localhost:3001/sse
 ```
 
+### Java
+
+```bash
+cd java
+mvn -q package -DskipTests
+
+# MCP server on :8002 (same server the Week 5 demos use)
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.mcp.DevBuddyMcpServer
+# → http://127.0.0.1:8002/sse
+```
+
+Java needs no extra setup beyond Qdrant + the API key: the agent is a
+hand-rolled state machine (see `java/pom.xml`), demos index `shared/data`
+themselves at start, and its agent tests flip `TOOL_BACKEND=local` so they
+never need the MCP server.
+
 ### Verify you're ready
 
 ```bash
-python -m pytest tests/test_agent.py -v
+python -m pytest tests/test_agent.py -v            # from python/  → 47 (full suite 96)
+npx vitest run tests/test_agent.js                 # from nodejs/  → 19 (full suite 88 + 1 skip)
+mvn -f java/pom.xml test -Dtest=AgentTest          # from repo root → 22 pure (+AgentLlmTest → 5)
 ```
 
-Unit tests (state, guards, registry, refusal) run anywhere. Integration tests are
-marked `skipif` — they tell you exactly which service they couldn't reach instead
-of erroring. All green with services up = fully verified.
+Unit tests (state, guards, registry, refusal) run anywhere. Integration tests
+are marked `skipif` (Python) / JUnit `Assumptions` (Java) — they tell you
+exactly which service they couldn't reach instead of erroring. All green with
+services up = fully verified.
 
 The executable validation table (needs the services above, ~1 min):
 
@@ -76,6 +95,9 @@ agent.py
 ```
 
 Everything below derives from **one dict**, `NODE_REGISTRY` — they cannot drift apart:
+(Node and Java build the identical composition from their own modules —
+`NODE_REGISTRY`/`Registry` with the same four derived surfaces; see
+*Scope: languages*.)
 
 | Derived from the registry | Where it shows up |
 |---|---|
@@ -126,7 +148,7 @@ transition you get:
 ### Step 2: dynamic routing (10 min)
 
 ```bash
-python scripts/week-06/demo-02-dynamic-routing.py
+python scripts/week-06/demo-02-dynamic-routing.py   # same flow: node scripts/week-06/demo-02-dynamic-routing.js · mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week06.Demo02DynamicRouting
 ```
 
 The planner node proposes, the registry disposes — and the demo **prints every
@@ -148,7 +170,7 @@ measured, not asserted.
 ### Step 3: C2 — remove a step, watch it hallucinate (12 min)
 
 ```bash
-python scripts/week-06/demo-04-missing-step.py
+python scripts/week-06/demo-04-missing-step.py   # same flow: node scripts/week-06/demo-04-missing-step.js · mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week06.Demo04MissingStep
 ```
 
 `check_build` is gone. `state['build_status']` is `None`. The naive report node
@@ -169,7 +191,7 @@ blocked answer instead.
 ### Step 4: C3 — validity, refusal, budget (15 min)
 
 ```bash
-python scripts/week-06/demo-05-guard-and-refusal.py
+python scripts/week-06/demo-05-guard-and-refusal.py   # same flow: node scripts/week-06/demo-05-guard-and-refusal.js · mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week06.Demo05GuardAndRefusal
 ```
 
 Four tests, each printing the guard's actual decision (`validate → PASS/BLOCKED`)
@@ -197,7 +219,7 @@ pick it up automatically. Restart the server, run demo-02. One dict, four surfac
 
 - [ ] C1: the compiled graph drives the fixed chain (streamed); audit shows 4 recorded steps with **per-step cost deltas**; report is an `AgentAnswer`
 - [ ] C2: you saw the naive report vs state — detected hallucination, or an honestly labeled hedge (`demo-04`)
-- [ ] C3: guard passes with data; blocks the missing-step graph with a typed answer at measurably lower cost; budget stops at `MAX_STEPS=2`
+- [ ] C3: guard passes with data; blocks the missing-step graph with a typed answer at measurably lower cost; budget stops at `MAX_STEPS=2` (`Budget.maxSteps` in node/java)
 - [ ] Refusal: `Deploy auth-service to production` is refused, listing only registry entries, with the plan reason in the audit
 - [ ] You can read a plan record (`proposal → decision → dispatched`) and explain every correction
 - [ ] You can flip `TOOL_BACKEND=local` and run the same agent without the MCP server
@@ -263,14 +285,14 @@ both (`TOOL_BACKEND`); the tradeoff is yours to state.
 |---------|-----|
 | `ToolFailure: get_build_status …` | MCP server down → pick your language: Python `python src/mcp_server.py` (**:8000**), Node `node src/mcp_server.js` (**:3001**), Java `mvn -q compile exec:java -Dexec.mainClass=devbuddy.mcp.DevBuddyMcpServer` (**:8002**) |
 | Qdrant connection refused | `docker-compose up -d` |
-| Retrieval empty / "No index found" | Python: `python -c "from src.rag import index_documents; index_documents()"`. Java demos index per run (`DemoSupport.primeIndex`) — a hand-rolled REPL must call `rag.indexDocuments()` first |
-| Integration tests skipped | That's the skipif markers working — start Qdrant + MCP server and re-run |
+| Retrieval empty / "No index found" | Python: `python -c "from src.rag import index_documents; index_documents()"` (retrieve also lazy-attaches to an existing collection via `_ensure_vectorstore`). Java demos index per run (`DemoSupport.primeIndex`) — a hand-rolled REPL must call `rag.indexDocuments()` first |
+| Integration tests skipped | That's the `skipif` / JUnit `Assumptions` markers working — start Qdrant + MCP server and re-run |
 | Node MCP connection refused | Node server is port **3001** (`node src/mcp_server.js`) |
 | Guard blocks a query you think should run | Check `REQUIREMENTS[classify_query(query)]` — the guard only demands what the category requires |
 | Router proposes a weird step | Watch `messages` — `plan` records proposal, decision, and reason; the registry check is auditable |
-| Empty model completions | The loops retry once with an nudge (`_final_answer`); if it persists, provider-side issue |
+| Empty model completions | The loops retry once with a nudge (`_final_answer`); Node/Java re-send a **perturbed** payload on retry — if it persists, provider-side issue |
 | `demo-04` prints "the model hedged this run" | That's an honest outcome — the model declined to assert build data. The vulnerability is still shown; hedging is luck, not a guardrail |
-| Retrieval returns empty strings in one language | Node and Python use SEPARATE Qdrant collections (`devbuddy-docs-node` / `devbuddy-docs`) — payload schemas are incompatible; re-index the language you're using |
+| Retrieval returns empty strings in one language | Node keeps its OWN collection (`devbuddy-docs-node`, incompatible payloads); Python and Java share `devbuddy-docs` (same embedding model) — re-index the language you're using |
 
 ---
 
