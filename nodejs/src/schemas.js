@@ -200,6 +200,58 @@ export const ServiceReadinessReportSchema = z
  */
 
 // ═══════════════════════════════════════════════════════════════
+// Week 6 — Agent contracts
+//
+// The agent reuses ReadinessVerdict + EvidenceChunk (Week 2) instead of
+// redefining them — composition over duplication. AgentAnswer is the one
+// new shape: an answer to ANY query type with an optional verdict.
+// ═══════════════════════════════════════════════════════════════
+
+export const AgentAnswerSchema = z
+  .object({
+    answer: z
+      .string()
+      .describe("Direct, one-paragraph answer to the user's query"),
+    verdict: ReadinessVerdictSchema
+      .nullable()
+      .default(null)
+      .describe(
+        "Set for readiness/health queries; null for docs/general questions"
+      ),
+    evidence: z
+      .array(EvidenceChunkSchema)
+      .default([])
+      .describe("What the answer is based on — one chunk per data source used"),
+  })
+  .refine(
+    (data) => {
+      // Week 2's contradiction rules (mirrors the Python reference —
+      // the evidence/confidence rule is deliberately a PROMPT rule only;
+      // making it a hard validator caused output-parsing failures):
+      if (!data.verdict) return true;
+      if (data.verdict.ready && data.verdict.blockers.length > 0) return false;
+      if (
+        !data.verdict.ready &&
+        data.verdict.confidence !== "low" &&
+        data.verdict.blockers.length === 0
+      ) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message:
+        "AgentAnswer verdict must be consistent: ready↔blockers↔confidence " +
+        "(Week 2 rules)",
+      path: ["verdict"],
+    }
+  );
+
+/**
+ * @typedef {z.infer<typeof AgentAnswerSchema>} AgentAnswer
+ */
+
+// ═══════════════════════════════════════════════════════════════
 // LLM Functions
 // ═══════════════════════════════════════════════════════════════
 

@@ -110,7 +110,7 @@ decision and a measured fixed-vs-dynamic cost), `demo-03` (conversational REPL).
 ### Step 1: C1 — study and run the fixed chain (15 min)
 
 ```bash
-python scripts/week-06/demo-01-fixed-chain.py   # (node demo-01 is a lighter run: same graph, less tracing)
+python scripts/week-06/demo-01-fixed-chain.py   # and: node scripts/week-06/demo-01-fixed-chain.js (same flow)
 ```
 
 The demo **streams the compiled graph** — `build_fixed_chain()` turns nodes +
@@ -239,10 +239,13 @@ both (`TOOL_BACKEND`); the tradeoff is yours to state.
 
 ## Scope: languages
 
-- **Python** — reference implementation (typed state, seam, three guards, all demos).
-- **Node.js** — runs the same demo flow (`scripts/week-06/`) against its own server
-  with the original string-typed agent; structural parity with the Python design is
-  tracked, not claimed.
+- **Python** — reference implementation (typed state contracts, `TOOL_BACKEND` seam, three guards, all demos).
+- **Node.js** — the same teaching architecture: streamed graphs, recorded audit
+  trail with per-step cost, structured `AgentAnswer`, registry-driven planning,
+  the three guards, and **all five demos** (`demo-01…05`). Remaining differences,
+  deliberate: data fields stay strings (no per-field contracts), retrieval is a
+  direct `rag.js` import (no `TOOL_BACKEND` seam), and no resource/prompt
+  consumption — Node's MCP server doesn't expose `search_docs`.
 - **Java** — port stops at Week 5 (see `java/README.md`). Week 6 is not ported.
 
 ---
