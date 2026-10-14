@@ -147,6 +147,68 @@ public final class JsonSchemas {
               "additionalProperties": false
             }""";
 
+    /**
+     * AgentAnswer — Week 6's structured answer to ANY query (mirrors
+     * Python {@code AgentAnswer} / Node's {@code AgentAnswerSchema}).
+     * Reuses the Week 2 {@code verdict} + {@code evidence} contracts;
+     * {@code verdict} is nullable for docs/general queries where
+     * "ready" is meaningless.
+     */
+    public static final String AGENT_ANSWER = """
+            {
+              "type": "object",
+              "properties": {
+                "answer": {
+                  "type": "string",
+                  "description": "Direct, one-paragraph answer to the user's query"
+                },
+                "verdict": {
+                  "type": ["object", "null"],
+                  "description": "Set for readiness/health queries; null for other query types",
+                  "properties": {
+                    "ready": { "type": "boolean", "description": "Is the service ready?" },
+                    "confidence": {
+                      "type": "string",
+                      "description": "How much the evidence supports the verdict",
+                      "enum": ["low", "medium", "high"]
+                    },
+                    "blockers": {
+                      "type": "array",
+                      "description": "Reasons the service is not ready",
+                      "items": { "type": "string" }
+                    },
+                    "recommended_next_steps": {
+                      "type": "array",
+                      "description": "What to do next",
+                      "items": { "type": "string" }
+                    }
+                  },
+                  "required": ["ready", "confidence", "blockers", "recommended_next_steps"],
+                  "additionalProperties": false
+                },
+                "evidence": {
+                  "type": "array",
+                  "description": "What the answer is based on — one chunk per data source used",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "description": "Where this came from",
+                        "enum": ["rag", "tool", "user"]
+                      },
+                      "content": { "type": "string", "description": "The evidence content" },
+                      "relevance_score": { "type": ["number", "null"], "description": "0.0–1.0 from the retriever, if RAG" }
+                    },
+                    "required": ["source", "content", "relevance_score"],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": ["answer", "verdict", "evidence"],
+              "additionalProperties": false
+            }""";
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private JsonSchemas() {

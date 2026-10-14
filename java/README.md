@@ -107,6 +107,19 @@ java/
     │   │   ├── mcp/                       # Week 5 MCP server
     │   │   │   └── DevBuddyMcpServer.java # tools + resources + prompts over SSE
     │   │   ├── scripts/week05/            # Week 5 MCP demos (client-side)
+    │   │   ├── agent/                     # Week 6 agent (state machine + guards)
+    │   │   │   ├── Graph.java             # hand-rolled state machine (nodes + routes)
+    │   │   │   ├── Registry.java          # single source of truth → 4 surfaces
+    │   │   │   ├── Guards.java            # validity guard + registry refusal (typed)
+    │   │   │   ├── Planner.java           # plan: LLM proposes, registry disposes
+    │   │   │   ├── Nodes.java             # workflow nodes (LLM / tools / RAG / report)
+    │   │   │   ├── Agents.java            # graph builders + runners + formatReport
+    │   │   │   ├── AgentState.java        # state + audit trail (cost deltas)
+    │   │   │   ├── AgentAnswer.java       # structured answer (Week 2 validators)
+    │   │   │   ├── ToolBackend.java       # TOOL_BACKEND seam: mcp (:8002) | local
+    │   │   │   ├── Budget.java            # guard 1: steps/cost ceiling
+    │   │   │   └── AuditRecord.java       # one audit event (step, detail, cost)
+    │   │   ├── scripts/week06/            # Week 6 agent demos (all five)
     │   │   └── cost/
     │   │       └── CostTracker.java        # Token → cost calculation
     │   └── resources/
@@ -115,8 +128,14 @@ java/
     └── test/
         └── java/devbuddy/
             ├── IntegrationTest.java        # 5 smoke tests (JUnit 5)
+            ├── SchemasTest.java            # Week 2 contracts (pure)
+            ├── SchemasLlmTest.java         # Week 2 structured output (OpenRouter)
             ├── RagTest.java                # Week 3 RAG (retrieval — needs Qdrant)
-            └── RagLlmTest.java             # Week 3 grounded answers (needs OpenRouter)
+            ├── RagLlmTest.java             # Week 3 grounded answers (needs OpenRouter)
+            ├── McpServerTest.java          # Week 5 MCP server (no LLM/Qdrant)
+            ├── ToolEngineTest.java         # Week 4 tool engine (pure)
+            ├── AgentTest.java              # Week 6 architecture/guards (pure)
+            └── AgentLlmTest.java           # Week 6 flows (Qdrant + OpenRouter, local backend)
 ```
 
 ## Differences from Python / Node.js
@@ -131,6 +150,7 @@ java/
 | Entry point | `if __name__ == "__main__"` | `main().catch(...)` | `Verification.main()` bootstraps Spring context |
 | Embeddings | `HuggingFaceEmbeddings` | `@xenova/transformers` | DJL + ONNX Runtime (`EmbeddingService`) |
 | Vector store | `QdrantVectorStore` (REST 6333) | `@langchain/qdrant` (REST 6333) | `QdrantClient` (gRPC 6334) |
+| Agent orchestration | `StateGraph` (langgraph) | `StateGraph` (langgraph) | hand-rolled `Graph` (nodes + routes — no extra dep, see pom.xml) |
 
 ## Week 2 — Structured Output Demos
 
@@ -245,15 +265,50 @@ mvn test -Dtest=McpServerTest
 > on the MCP Java SDK directly and run the WebFlux SSE transport on an embedded
 > reactor-netty server — no Boot, no servlet container.
 
-## Week 6 scope (explicit)
+## Week 6 — Agentic Workflows
 
-The Java port **stops at Week 5**. Week 6 (agentic workflows) is taught from the
-Python reference implementation — typed `AgentState`, the `call_tool` seam with
-its `mcp`/`local` backends, and the three guards (budget / structural / business)
-live in `python/src/agent.py`, with Node.js demos mirroring the flow. Porting the
-agent to Java is deliberately out of scope: the lesson is the architecture and the
-state-machine discipline, which transfers across languages — see `docs/week-06.md`
-→ *Scope: languages*.
+Week 6 ports the agent's teaching architecture with the same five-checkpoint
+flow as Python/Node — streamed graphs, a recorded **audit trail with per-step
+cost**, a structured **`AgentAnswer`** (Week 2 contracts via
+`response_format=json_schema`), `Registry` as the single source of truth, and
+the three guards (budget / structural / validity), plus the C2/C3 graph
+variants.
+
+The design decision is the one in `pom.xml`: **no extra dependency — a
+hand-rolled state machine** (`devbuddy.agent.Graph`: nodes are functions,
+edges are route functions that read state, and the runtime walks them — no
+demo writes a node-to-node loop). Java also keeps Python's **`TOOL_BACKEND`
+seam**: `mcp` (default → Week 5 server, SSE :8002) or `local` (Week 4
+`ToolData`, in-process — what the tests use).
+
+**Prerequisites:** Qdrant running (`docker-compose up -d` from the repo root)
+and `OPENROUTER_API_KEY`. Each demo indexes `shared/data` for its own process
+(`RagService.requireIndexed()` checks an in-memory flag), and degrades
+visibly — with Qdrant down, the retrieve node records a failure in the audit
+trail instead of crashing.
+
+```bash
+cd java
+
+# Terminal 1 — MCP server (TOOL_BACKEND default = mcp, SSE on :8002)
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.mcp.DevBuddyMcpServer
+
+# Terminal 2 — the five demos (same names and teaching flow as python/node)
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week06.Demo01FixedChain          # C1: streamed transitions + filled/empty panel
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week06.Demo02DynamicRouting      # plan decisions + measured fixed-vs-dynamic
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week06.Demo03ConversationalAgent # REPL (help → refusal + docs probes)
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week06.Demo04MissingStep         # C2: naive {} report + guard contrast
+mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week06.Demo05GuardAndRefusal     # 4 tests: pass / block / refuse / budget
+
+# Tests — 22 pure (no services) + 5 LLM/integration (Qdrant + key, local backend)
+mvn test -Dtest=AgentTest
+mvn test -Dtest=AgentLlmTest
+```
+
+Scope note (docs → *Scope: languages*): like Node and unlike Python, data
+fields stay **strings** (no per-field `BuildStatus`/`DeployRecord` contracts);
+unlike Node, Java *has* the `TOOL_BACKEND` seam. The `delete_incident_record`
+surface stays a Week-05 demo — the agent doesn't consume it.
 
 ## Each Week
 

@@ -110,7 +110,7 @@ decision and a measured fixed-vs-dynamic cost), `demo-03` (conversational REPL).
 ### Step 1: C1 — study and run the fixed chain (15 min)
 
 ```bash
-python scripts/week-06/demo-01-fixed-chain.py   # and: node scripts/week-06/demo-01-fixed-chain.js (same flow)
+python scripts/week-06/demo-01-fixed-chain.py   # same flow: node scripts/week-06/demo-01-fixed-chain.js · mvn -q compile exec:java -Dexec.mainClass=devbuddy.scripts.week06.Demo01FixedChain
 ```
 
 The demo **streams the compiled graph** — `build_fixed_chain()` turns nodes +
@@ -246,7 +246,14 @@ both (`TOOL_BACKEND`); the tradeoff is yours to state.
   deliberate: data fields stay strings (no per-field contracts), retrieval is a
   direct `rag.js` import (no `TOOL_BACKEND` seam), and no resource/prompt
   consumption — Node's MCP server doesn't expose `search_docs`.
-- **Java** — port stops at Week 5 (see `java/README.md`). Week 6 is not ported.
+- **Java** — the same teaching architecture, hand-rolled: no extra dependency
+  (see `java/pom.xml`), so the graph is a small state machine
+  (`devbuddy.agent.Graph`: nodes are functions, edges are route functions that
+  read state). Audit trail with per-step cost, structured `AgentAnswer` through
+  native `response_format=json_schema`, `Registry` single source of truth, the
+  three guards, **all five demos** (`scripts.week06.Demo01…05`), and — like
+  Python — the `TOOL_BACKEND` seam (`mcp` :8002 default / `local`). Data fields
+  stay strings (no per-field contracts). See `java/README.md` → *Week 6*.
 
 ---
 
@@ -254,9 +261,9 @@ both (`TOOL_BACKEND`); the tradeoff is yours to state.
 
 | Problem | Fix |
 |---------|-----|
-| `ToolFailure: get_build_status …` | MCP server down → `python src/mcp_server.py` (port 8000) |
+| `ToolFailure: get_build_status …` | MCP server down → pick your language: Python `python src/mcp_server.py` (**:8000**), Node `node src/mcp_server.js` (**:3001**), Java `mvn -q compile exec:java -Dexec.mainClass=devbuddy.mcp.DevBuddyMcpServer` (**:8002**) |
 | Qdrant connection refused | `docker-compose up -d` |
-| Retrieval empty / "No index found" | `python -c "from src.rag import index_documents; index_documents()"` (retrieve also lazy-connects to an existing collection) |
+| Retrieval empty / "No index found" | Python: `python -c "from src.rag import index_documents; index_documents()"`. Java demos index per run (`DemoSupport.primeIndex`) — a hand-rolled REPL must call `rag.indexDocuments()` first |
 | Integration tests skipped | That's the skipif markers working — start Qdrant + MCP server and re-run |
 | Node MCP connection refused | Node server is port **3001** (`node src/mcp_server.js`) |
 | Guard blocks a query you think should run | Check `REQUIREMENTS[classify_query(query)]` — the guard only demands what the category requires |

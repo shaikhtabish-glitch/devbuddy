@@ -1,5 +1,6 @@
 package devbuddy.config;
 
+import devbuddy.agent.Agents;
 import devbuddy.rag.EmbeddingService;
 import devbuddy.rag.RagService;
 import devbuddy.service.SchemasService;
@@ -110,6 +111,16 @@ public class AppConfig {
     @Bean
     public RagService ragService(ChatClient chatClient, EmbeddingService embeddingService) {
         return new RagService(chatClient, model, embeddingService, qdrantHost, qdrantGrpcPort);
+    }
+
+    /**
+     * Week 6 — the agent (hand-rolled state machine + three guards).
+     * Tool backend from {@code TOOL_BACKEND} (default mcp, port 8002);
+     * connected lazily, so constructing the bean never needs the server.
+     */
+    @Bean
+    public Agents agents(ChatClient chatClient, RagService ragService) {
+        return new Agents(chatClient, model, ragService);
     }
 
     /** Exposed as a named bean so other components can reference the model name. */
