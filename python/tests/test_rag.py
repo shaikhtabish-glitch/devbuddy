@@ -66,6 +66,11 @@ def test_retrieve_returns_relevant_chunks():
     )
 
 
+def test_index_preserves_utf8_punctuation():
+    chunks = retrieve("INC-842 payment-api latency spike", k=20)
+    assert any("INC-842 — payment-api latency spike" in chunk for chunk in chunks)
+
+
 def test_retrieve_returns_different_chunks_for_different_queries():
     """Different queries return different chunks."""
     pay_chunks = retrieve("payment API timeout", k=3)

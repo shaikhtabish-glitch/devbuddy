@@ -151,12 +151,14 @@ def index_documents(
         target,
         glob="**/*.md",
         loader_cls=TextLoader,
+        loader_kwargs={"encoding": "utf-8"},
         show_progress=False,
     )
     txt_loader = DirectoryLoader(
         target,
         glob="**/*.txt",
         loader_cls=TextLoader,
+        loader_kwargs={"encoding": "utf-8"},
         show_progress=False,
     )
     docs = loader.load() + txt_loader.load()

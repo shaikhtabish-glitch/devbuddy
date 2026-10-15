@@ -97,7 +97,12 @@ else:
 if hedged:
     print(f"      hedge present              : {hedged.group(0)!r}")
 print()
-if detected:
+if result["error"].startswith("generate_report_naive:"):
+    print("      → INCONCLUSIVE: naive report generation failed its output")
+    print("        contract. There is no successful answer to classify as")
+    print("        either a hallucination or an honest hedge.")
+    print(f"        Error: {result['error'].splitlines()[0]}")
+elif detected:
     print("      → HALLUCINATION: the report asserts (or cites tool evidence for)")
     print("        build data that state says was never collected. The model")
     print("        filled a gap YOUR graph left open — it predicts tokens,")
@@ -124,7 +129,7 @@ print()
 print(f"  📤  TYPED BLOCKED ANSWER (written by the guard, no LLM):")
 print(format_report(guarded["report"]))
 print()
-print("  The agent REFUSED to produce a confident report from empty state.")
+print("  The guard BLOCKED report generation from incomplete state.")
 print("  Guard = difference between 'tried its best' and 'knew it couldn't'.")
 print("=" * 65)
 print()
